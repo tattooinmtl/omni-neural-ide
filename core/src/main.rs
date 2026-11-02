@@ -1,7 +1,8 @@
 //! OMNI-CODE core.
 //!
-//! This process is the harness and the application window. It serves the Ultra
-//! shell on a fixed loopback port, then opens that address in a system webview.
+//! This process is the harness and the application window. It serves the shell
+//! on a fixed loopback port, then opens that address in a system webview.
+//! Accepts --style ultra|plain from the launcher.
 
 #![windows_subsystem = "windows"]
 
@@ -20,6 +21,7 @@ mod window;
 use anyhow::Context;
 use app::{locate_install_root, Core};
 use mimalloc::MiMalloc;
+use std::env;
 use std::time::{Duration, Instant};
 
 #[global_allocator]
@@ -43,8 +45,12 @@ fn run() -> anyhow::Result<()> {
         )
         .init();
 
+    let style = parse_style();
     let install_root = locate_install_root();
-    let core = Core::boot(install_root);
+    let mut core = Core::boot(install_root);
+    core.settings.version_style = style.clone();
+    let _ = core.settings.save(&core.settings_path);
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -53,6 +59,25 @@ fn run() -> anyhow::Result<()> {
     wait_for_server(&runtime, &mut server, LISTEN_PORT)?;
     window::open(LISTEN_PORT)?;
     Ok(())
+}
+
+fn parse_style() -> String {
+    let args: Vec<String> = env::args().collect();
+    for i in 0..args.len() {
+        if args[i] == "--style" && i + 1 < args.len() {
+            let s = args[i + 1].to_lowercase();
+            if s == "plain" || s == "ultra" {
+                return s;
+            }
+        }
+    }
+    if let Ok(s) = env::var("OMNI_STYLE") {
+        let s = s.to_lowercase();
+        if s == "plain" || s == "ultra" {
+            return s;
+        }
+    }
+    "ultra".into()
 }
 
 fn wait_for_server(
