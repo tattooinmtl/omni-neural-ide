@@ -69,6 +69,9 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	info, _ := os.Stat(binary)
+	fmt.Printf("Using binary: %s\n", binary)
+	fmt.Printf("Modified: %s\n", info.ModTime().Format("2006-01-02 15:04:05"))
 
 	cmd := exec.Command(binary, "--style", style)
 	cmd.Stdout = os.Stdout
