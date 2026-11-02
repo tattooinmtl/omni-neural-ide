@@ -1,7 +1,7 @@
-// OMNI-CODE launcher with provider settings UI.
+// OMNI-CODE launcher.
 //
-// Serves a small local page so you can set API keys and rate limits,
-// then starts the Rust core with the chosen style.
+// Starts the Rust core which opens a native window.
+// No browser. No localhost link.
 package main
 
 import (
@@ -32,7 +32,6 @@ type ProviderConfig struct {
 }
 
 const coreURL = "http://127.0.0.1:47321/"
-const launcherPort = 47320
 const launcherVersion = "v0.3.0"
 
 func main() {
@@ -47,14 +46,6 @@ func main() {
 	}
 
 	cfg := loadConfig()
-	fmt.Println("Open http://127.0.0.1:47320 in a browser to set providers.")
-	fmt.Println("Or press Enter to continue with saved settings.")
-
-	go serveSettings(&cfg)
-
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Press Enter when ready (or after saving settings in the browser)... ")
-	reader.ReadString('\n')
 
 	style := askStyle()
 	cfg.Style = style
@@ -94,104 +85,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Core started. Waiting for window...")
+	fmt.Println("Opening native window...")
 	waitForHealth()
-	fmt.Println("Ready.")
+	fmt.Println("Window opened.")
 	cmd.Wait()
-}
-
-func serveSettings(cfg *ProviderConfig) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			r.ParseForm()
-			cfg.MiniMaxKey = r.FormValue("minimax_key")
-			cfg.MiniMaxModel = r.FormValue("minimax_model")
-			cfg.MiniMaxBase = r.FormValue("minimax_base")
-			fmt.Sscanf(r.FormValue("minimax_rpm"), "%d", &cfg.MiniMaxRPM)
-			fmt.Sscanf(r.FormValue("minimax_tpm"), "%d", &cfg.MiniMaxTPM)
-			cfg.NvidiaKey = r.FormValue("nvidia_key")
-			cfg.NvidiaModel = r.FormValue("nvidia_model")
-			cfg.NvidiaBase = r.FormValue("nvidia_base")
-			fmt.Sscanf(r.FormValue("nvidia_rpm"), "%d", &cfg.NvidiaRPM)
-			fmt.Sscanf(r.FormValue("nvidia_max_tools"), "%d", &cfg.NvidiaMaxTools)
-			cfg.SandboxPath = r.FormValue("sandbox_path")
-			cfg.Style = r.FormValue("style")
-			saveConfig(*cfg)
-			http.Redirect(w, r, "/?saved=1", http.StatusSeeOther)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, settingsHTML(*cfg))
-	})
-	fmt.Println("Settings UI: http://127.0.0.1:47320")
-	http.ListenAndServe(":47320", nil)
-}
-
-func settingsHTML(cfg ProviderConfig) string {
-	saved := ""
-	if cfg.Style != "" {
-		saved = `<p style="color:green;">Saved.</p>`
-	}
-	return fmt.Sprintf(`<!doctype html>
-<html><head><meta charset="utf-8"><title>OMNI-CODE Launcher</title>
-<style>
-body{font:14px system-ui;background:#0e1117;color:#e6edf3;margin:0;padding:20px;}
-.box{max-width:560px;margin:auto;background:#161b22;border:1px solid #21262d;border-radius:8px;padding:20px;}
-h2{margin:0 0 12px;font-size:16px;}
-label{display:block;margin:8px 0 2px;font-size:12px;color:#8b949e;}
-input,select{width:100%%;padding:6px 8px;background:#0d1117;border:1px solid #21262d;color:#e6edf3;border-radius:4px;}
-button{margin-top:14px;background:#58a6ff;color:#fff;border:0;padding:8px 16px;border-radius:4px;cursor:pointer;}
-.note{font-size:11px;color:#8b949e;margin-top:4px;}
-</style></head><body>
-<div class="box">
-<h2>OMNI-CODE Provider Settings <span style="font-size:12px;color:#8b949e;">%s</span></h2>
-%s
-<form method="post">
-<h3>MiniMax (main agent)</h3>
-<label>API Key</label><input name="minimax_key" value="%s" type="password">
-<label>Model</label><input name="minimax_model" value="%s">
-<label>Base URL</label><input name="minimax_base" value="%s">
-<label>RPM limit</label><input name="minimax_rpm" type="number" value="%d">
-<label>TPM limit</label><input name="minimax_tpm" type="number" value="%d">
-<div class="note">Paid: 200 RPM / 10M TPM. Free: 20 RPM / 1M TPM.</div>
-
-<h3>NVIDIA NIM (assistant sub-agent / sandbox)</h3>
-<label>API Key</label><input name="nvidia_key" value="%s" type="password">
-<label>Model</label><input name="nvidia_model" value="%s">
-<label>Base URL</label><input name="nvidia_base" value="%s">
-<label>RPM limit</label><input name="nvidia_rpm" type="number" value="%d">
-<label>Max tool calls / min</label><input name="nvidia_max_tools" type="number" value="%d">
-<div class="note">Free tier: 40 RPM. Keep tool calls low to avoid 400s. TPM is gray.</div>
-
-<h3>Sandbox</h3>
-<label>Sandbox folder (NIM can only write here)</label>
-<input name="sandbox_path" value="%s">
-<div class="note">NIM can read outside, write only inside. Main agent reads results from here.</div>
-
-<h3>Version</h3>
-<label>Style</label>
-<select name="style">
-<option value="ultra" %s>Ultra</option>
-<option value="plain" %s>Plain</option>
-</select>
-
-<button type="submit">Save</button>
-</form>
-<p style="font-size:12px;color:#8b949e;margin-top:16px;">After saving, go back to the terminal and press Enter to start.</p>
-</div></body></html>`,
-		launcherVersion, saved,
-		cfg.MiniMaxKey, cfg.MiniMaxModel, cfg.MiniMaxBase, cfg.MiniMaxRPM, cfg.MiniMaxTPM,
-		cfg.NvidiaKey, cfg.NvidiaModel, cfg.NvidiaBase, cfg.NvidiaRPM, cfg.NvidiaMaxTools,
-		cfg.SandboxPath,
-		selected(cfg.Style, "ultra"), selected(cfg.Style, "plain"),
-	)
-}
-
-func selected(cur, val string) string {
-	if cur == val {
-		return "selected"
-	}
-	return ""
 }
 
 func loadConfig() ProviderConfig {
