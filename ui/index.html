@@ -19,6 +19,7 @@
       --caret: #cccccc;
       --tab-active: #1e1e1e;
       --tab-inactive: #2d2d2d;
+      --status: #007acc;
     }
     body[data-theme="light"] {
       --bg: #ffffff;
@@ -34,40 +35,41 @@
       --caret: #333333;
       --tab-active: #ffffff;
       --tab-inactive: #ececec;
+      --status: #0066b8;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; }
     body { display: flex; flex-direction: column; }
 
-    /* Menu bar (plain) */
-    .menubar { display: none; height: 28px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; padding: 0 8px; gap: 2px; }
+    /* Menu bar (plain only) */
+    .menubar { display: none; height: 28px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; padding: 0 4px; }
     body[data-style="plain"] .menubar { display: flex; }
-    .menubar span { padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+    .menubar span { padding: 2px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
     .menubar span:hover { background: var(--border); }
 
-    /* Top bar */
-    .topbar { display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--border); height: 30px; }
-    body[data-style="plain"] .topbar { display: none; }
-    .title { font-weight: 600; font-size: 13px; }
+    /* Title bar (ultra only) */
+    .titlebar { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--border); height: 28px; }
+    body[data-style="plain"] .titlebar { display: none; }
+    .title { font-weight: 600; font-size: 12px; }
     .version { font-size: 10px; color: var(--muted); }
-    .badge { font-size: 10px; color: var(--muted); padding: 1px 6px; border: 1px solid var(--border); border-radius: 3px; }
+    .badge { font-size: 10px; color: var(--muted); padding: 1px 5px; border: 1px solid var(--border); border-radius: 2px; }
 
     /* Layout */
-    .layout { flex: 1; display: grid; grid-template-columns: 48px 240px 1fr 280px; min-height: 0; }
-    body[data-style="plain"] .layout { grid-template-columns: 240px 1fr 280px; }
+    .layout { flex: 1; display: grid; grid-template-columns: 48px 220px 1fr 260px; min-height: 0; }
+    body[data-style="plain"] .layout { grid-template-columns: 220px 1fr 260px; }
     body[data-style="plain"] .activity { display: none; }
 
     /* Activity bar (ultra) */
-    .activity { background: var(--activity); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 4px; gap: 1px; }
-    .act-btn { width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+    .activity { background: var(--activity); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 2px; }
+    .act-btn { width: 48px; height: 48px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 20px; }
     .act-btn.active, .act-btn:hover { color: var(--text); }
     body[data-style="ultra"] .act-btn.active { border-left: 2px solid var(--accent); }
 
     /* Sidebar */
     .sidebar { background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
-    .side-head { padding: 6px 12px; font-size: 11px; letter-spacing: 0.5px; color: var(--muted); border-bottom: 1px solid var(--border); text-transform: uppercase; }
-    .file-list { flex: 1; overflow: auto; padding: 2px 0; }
-    .file { padding: 2px 12px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    .side-head { padding: 6px 12px; font-size: 11px; letter-spacing: 0.5px; color: var(--muted); text-transform: uppercase; }
+    .file-list { flex: 1; overflow: auto; }
+    .file { padding: 1px 12px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px; }
     .file:hover { background: var(--border); }
     .file.active { background: #37373d; }
     body[data-theme="light"] .file.active { background: #e4e6f1; }
@@ -75,26 +77,27 @@
     /* Editor */
     .editor { display: flex; flex-direction: column; min-width: 0; }
     .tabs { display: flex; background: var(--tab-inactive); border-bottom: 1px solid var(--border); height: 35px; align-items: stretch; }
-    .tab { padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 12px; background: var(--tab-inactive); border-right: 1px solid var(--border); }
+    .tab { padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; background: var(--tab-inactive); border-right: 1px solid var(--border); }
     .tab.active { background: var(--tab-active); }
+    .tab .close { opacity: 0; font-size: 10px; }
+    .tab:hover .close { opacity: 1; }
     .editor-body { flex: 1; display: flex; min-height: 0; }
-    textarea { flex: 1; border: 0; resize: none; background: var(--bg); color: var(--text); font: 13px/1.5 Consolas, Monaco, monospace; padding: 8px 12px; outline: none; caret-color: var(--caret); }
+    textarea { flex: 1; border: 0; resize: none; background: var(--bg); color: var(--text); font: 14px/1.5 Consolas, Monaco, monospace; padding: 8px 0 8px 16px; outline: none; caret-color: var(--caret); }
     input { caret-color: var(--caret); }
 
     /* Chat */
     .chat { background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
     .chat-head { padding: 6px 12px; font-size: 11px; letter-spacing: 0.5px; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; text-transform: uppercase; }
     .transcript { flex: 1; overflow: auto; padding: 8px; }
-    .line { margin: 4px 0; padding: 6px 8px; border-radius: 4px; font-size: 12px; }
+    .line { margin: 4px 0; padding: 6px 8px; border-radius: 4px; font-size: 13px; }
     .line.you { background: #0e639c22; }
     .line.assistant { background: var(--border); }
     .assist-form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
-    .assist-form input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 3px; padding: 5px 8px; }
-    .btn { background: var(--accent); color: #fff; border: 0; border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+    .assist-form input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 3px; padding: 6px 8px; }
+    .btn { background: var(--accent); color: #fff; border: 0; border-radius: 3px; padding: 5px 12px; cursor: pointer; font-size: 12px; }
 
-    /* Status */
-    .status { display: flex; gap: 16px; padding: 2px 12px; background: #007acc; color: #fff; font-size: 11px; height: 22px; align-items: center; }
-    body[data-theme="light"] .status { background: #0066b8; }
+    /* Status bar */
+    .status { display: flex; gap: 16px; padding: 0 12px; background: var(--status); color: #fff; font-size: 12px; height: 22px; align-items: center; }
     .status b { font-weight: 500; }
 
     /* Goal bar */
@@ -102,18 +105,18 @@
     .goalbar input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 3px; padding: 4px 8px; }
 
     /* NIM panel */
-    .nim-panel { height: 100px; background: #1a1a1a; border-top: 1px solid var(--border); display: flex; flex-direction: column; }
+    .nim-panel { height: 80px; background: #1a1a1a; border-top: 1px solid var(--border); display: flex; flex-direction: column; }
     body[data-theme="light"] .nim-panel { background: #f8f8f8; }
-    .nim-head { padding: 3px 12px; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+    .nim-head { padding: 2px 12px; font-size: 10px; color: var(--muted); text-transform: uppercase; }
     .nim-log { flex: 1; overflow: auto; padding: 2px 12px; font: 11px Consolas, monospace; color: #4ec9b0; }
     body[data-theme="light"] .nim-log { color: #0b7d3e; }
 
     /* Floating assistant */
-    .floating { position: fixed; right: 16px; bottom: 40px; width: 300px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px #0006; display: flex; flex-direction: column; z-index: 20; }
+    .floating { position: fixed; right: 16px; bottom: 40px; width: 280px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px #0006; display: flex; flex-direction: column; z-index: 20; }
     .float-head { padding: 6px 10px; font-size: 11px; cursor: move; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
     .float-face { display: flex; justify-content: center; padding: 4px; background: #1a1a1a; }
     body[data-theme="light"] .float-face { background: #f0f0f0; }
-    .float-body { max-height: 120px; overflow: auto; padding: 6px; font-size: 12px; }
+    .float-body { max-height: 100px; overflow: auto; padding: 6px; font-size: 12px; }
     .actions { display: flex; gap: 4px; padding: 6px; flex-wrap: wrap; }
     .actions button { background: var(--border); color: var(--text); border: 0; border-radius: 3px; padding: 3px 7px; font-size: 10px; cursor: pointer; }
 
@@ -125,7 +128,7 @@
   <div class="menubar">
     <span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span>
   </div>
-  <div class="topbar">
+  <div class="titlebar">
     <span class="title" id="app-title">OMNI-CODE Ultra</span>
     <span class="version" id="app-version">v0.3.0</span>
     <span class="badge" id="style-name">Ultra</span>
@@ -133,7 +136,7 @@
     <span class="badge" id="sb-mood">calm</span>
   </div>
   <form class="goalbar" id="goalbar">
-    <input id="goal" placeholder="Goal (creates plan.md, agents.md, instructions.txt)" />
+    <input id="goal" placeholder="Goal" />
     <button type="submit" class="btn" id="run">Run</button>
     <button type="button" class="btn" id="accept" hidden>Accept</button>
     <button type="button" class="btn" id="reject" hidden>Reject</button>
@@ -154,18 +157,18 @@
     </div>
     <div class="editor">
       <div class="tabs">
-        <div class="tab active" id="tab-name">no file</div>
+        <div class="tab active" id="tab-name">no file <span class="close">×</span></div>
         <button class="btn" id="save" style="margin: 4px 8px; padding: 2px 8px;">Save</button>
       </div>
       <div class="editor-body">
-        <textarea id="code" spellcheck="false" placeholder="Open a file or run a goal"></textarea>
+        <textarea id="code" spellcheck="false" placeholder=""></textarea>
       </div>
     </div>
     <div class="chat">
       <div class="chat-head">
         <span>Assistant</span>
         <span>
-          <button class="btn" id="voice-toggle" style="padding: 2px 6px; font-size: 10px;">Voice Off</button>
+          <button class="btn" id="voice-toggle" style="padding: 2px 6px; font-size: 10px;">Voice</button>
           <button class="btn" id="mute" style="padding: 2px 6px; font-size: 10px;">Mute</button>
         </span>
       </div>
@@ -177,8 +180,8 @@
     </div>
   </div>
   <div class="nim-panel">
-    <div class="nim-head">NIM Sandbox</div>
-    <div class="nim-log" id="nim-log"><div class="empty">NIM idle</div></div>
+    <div class="nim-head">NIM</div>
+    <div class="nim-log" id="nim-log"></div>
   </div>
   <div class="status">
     <span>Phase: <b id="sb-step">idle</b></span>
@@ -211,7 +214,7 @@
     <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">SETTINGS</div>
     <label>Theme <select id="set-theme"><option value="dark">dark</option><option value="light">light</option></select></label><br>
     <label>Version <select id="set-style"><option value="ultra">ultra</option><option value="plain">plain</option></select></label><br>
-    <label>Font size <input id="set-font" type="number" min="11" max="22" value="13" /></label><br>
+    <label>Font size <input id="set-font" type="number" min="11" max="22" value="14" /></label><br>
     <label>Drift <select id="set-drift"><option value="warn">warn</option><option value="pause">pause</option></select></label><br>
     <label>Intervention <select id="set-int"><option value="pass">pass</option><option value="hold">hold</option></select></label><br>
     <button class="btn" id="save-settings" style="margin-top:8px;">Save</button>
