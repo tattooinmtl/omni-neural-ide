@@ -39,6 +39,7 @@
     body { display: flex; flex-direction: column; }
     .topbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; background: var(--panel); border-bottom: 1px solid var(--border); height: 32px; }
     .title { font-weight: 600; letter-spacing: 0.5px; }
+    .version { font-size: 10px; color: var(--muted); margin-left: 4px; }
     .badge { font-size: 10px; color: var(--muted); padding: 1px 6px; border: 1px solid var(--border); border-radius: 3px; }
     .layout { flex: 1; display: grid; grid-template-columns: 48px 240px 1fr 300px; min-height: 0; }
     .activity { background: var(--activity); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 6px; gap: 2px; }
@@ -90,6 +91,7 @@
 <body data-theme="dark" data-style="ultra">
   <div class="topbar">
     <span class="title" id="app-title">OMNI-CODE Ultra</span>
+    <span class="version" id="app-version">v0.3.0</span>
     <span class="badge" id="style-name">Ultra</span>
     <span class="badge" id="sb-theme">Dark</span>
     <span class="badge" id="sb-mood">calm</span>

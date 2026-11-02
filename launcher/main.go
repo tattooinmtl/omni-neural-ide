@@ -33,10 +33,11 @@ type ProviderConfig struct {
 
 const coreURL = "http://127.0.0.1:47321/"
 const launcherPort = 47320
+const launcherVersion = "v0.3.0"
 
 func main() {
 	fmt.Println("========================================")
-	fmt.Println("  OMNI-CODE Launcher")
+	fmt.Printf("  OMNI-CODE Launcher %s\n", launcherVersion)
 	fmt.Println("========================================")
 	fmt.Println()
 
@@ -55,10 +56,7 @@ func main() {
 	fmt.Print("Press Enter when ready (or after saving settings in the browser)... ")
 	reader.ReadString('\n')
 
-	style := cfg.Style
-	if style == "" {
-		style = askStyle()
-	}
+	style := askStyle()
 	cfg.Style = style
 	saveConfig(cfg)
 
@@ -146,7 +144,7 @@ button{margin-top:14px;background:#58a6ff;color:#fff;border:0;padding:8px 16px;b
 .note{font-size:11px;color:#8b949e;margin-top:4px;}
 </style></head><body>
 <div class="box">
-<h2>OMNI-CODE Provider Settings</h2>
+<h2>OMNI-CODE Provider Settings <span style="font-size:12px;color:#8b949e;">%s</span></h2>
 %s
 <form method="post">
 <h3>MiniMax (main agent)</h3>
@@ -181,7 +179,7 @@ button{margin-top:14px;background:#58a6ff;color:#fff;border:0;padding:8px 16px;b
 </form>
 <p style="font-size:12px;color:#8b949e;margin-top:16px;">After saving, go back to the terminal and press Enter to start.</p>
 </div></body></html>`,
-		saved,
+		launcherVersion, saved,
 		cfg.MiniMaxKey, cfg.MiniMaxModel, cfg.MiniMaxBase, cfg.MiniMaxRPM, cfg.MiniMaxTPM,
 		cfg.NvidiaKey, cfg.NvidiaModel, cfg.NvidiaBase, cfg.NvidiaRPM, cfg.NvidiaMaxTools,
 		cfg.SandboxPath,
