@@ -1,6 +1,4 @@
 //! Loopback HTTP API and the static shell.
-//!
-//! The native window loads this address. Nothing here listens on a public interface.
 
 use crate::app::Core;
 use crate::eventbus::EventBus;
@@ -33,19 +31,13 @@ struct Envelope {
 }
 
 #[derive(Deserialize)]
-struct GoalBody {
-    goal: String,
-}
+struct GoalBody { goal: String }
 
 #[derive(Deserialize)]
-struct LineBody {
-    line: String,
-}
+struct LineBody { line: String }
 
 #[derive(Deserialize)]
-struct ReviewBody {
-    decision: String,
-}
+struct ReviewBody { decision: String }
 
 #[derive(Deserialize)]
 struct PathBody {
@@ -55,9 +47,7 @@ struct PathBody {
 }
 
 #[derive(Deserialize)]
-struct FileQuery {
-    path: String,
-}
+struct FileQuery { path: String }
 
 #[derive(Deserialize)]
 struct AssistantBody {
@@ -75,10 +65,7 @@ struct AssistantBody {
 pub async fn serve(core: Core, port: u16) -> anyhow::Result<()> {
     let ui = core.install_root.join("ui");
     let bus = core.bus.clone();
-    let state = AppState {
-        core: Arc::new(Mutex::new(core)),
-        bus,
-    };
+    let state = AppState { core: Arc::new(Mutex::new(core)), bus };
     let router = Router::new()
         .route("/api/health", get(health))
         .route("/api/state", get(state_of))
@@ -111,10 +98,7 @@ async fn state_of(State(app): State<AppState>) -> Json<Envelope> {
 async fn intake(State(app): State<AppState>, Json(body): Json<GoalBody>) -> Json<Envelope> {
     let mut core = lock(&app);
     match core.intake(&body.goal) {
-        Ok(()) => {
-            let message = core.harness.status_detail.clone();
-            reply(&core, true, message, None)
-        }
+        Ok(()) => { let m = core.harness.status_detail.clone(); reply(&core, true, m, None) }
         Err(err) => reply(&core, false, err, None),
     }
 }
@@ -122,10 +106,7 @@ async fn intake(State(app): State<AppState>, Json(body): Json<GoalBody>) -> Json
 async fn resume(State(app): State<AppState>) -> Json<Envelope> {
     let mut core = lock(&app);
     match core.resume_run() {
-        Ok(()) => {
-            let message = core.harness.status_detail.clone();
-            reply(&core, true, message, None)
-        }
+        Ok(()) => { let m = core.harness.status_detail.clone(); reply(&core, true, m, None) }
         Err(err) => reply(&core, false, err, None),
     }
 }
@@ -138,7 +119,7 @@ async fn review(State(app): State<AppState>, Json(body): Json<ReviewBody>) -> Js
         _ => Err("decision must be accept or reject".into()),
     };
     match result {
-        Ok(message) => reply(&core, true, message, None),
+        Ok(m) => reply(&core, true, m, None),
         Err(err) => reply(&core, false, err, None),
     }
 }
@@ -158,6 +139,9 @@ async fn assistant(State(app): State<AppState>, Json(body): Json<AssistantBody>)
         "audit" => Ok(core.assistant_audit()),
         "mark" => core.assistant_mark(&body.path, &body.text),
         "edit" => core.assistant_edit(&body.path, &body.content),
+        "scan" => Ok(core.assistant_scan(&body.path)),
+        "mkdir" => core.assistant_mkdir(&body.path),
+        "search" => Ok(core.assistant_search_hint(&body.text)),
         "voice" => {
             let on = body.on.unwrap_or(!core.settings.voice_mode);
             core.set_voice(on)
@@ -170,7 +154,7 @@ async fn assistant(State(app): State<AppState>, Json(body): Json<AssistantBody>)
         other => Err(format!("unknown assistant action: {other}")),
     };
     match result {
-        Ok(message) => reply(&core, true, message, None),
+        Ok(m) => reply(&core, true, m, None),
         Err(err) => reply(&core, false, err, None),
     }
 }
@@ -218,14 +202,9 @@ async fn events(State(app): State<AppState>) -> Sse<impl tokio_stream::Stream<It
 }
 
 fn lock(app: &AppState) -> std::sync::MutexGuard<'_, Core> {
-    app.core.lock().unwrap_or_else(|poison| poison.into_inner())
+    app.core.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 fn reply(core: &Core, ok: bool, message: impl Into<String>, content: Option<String>) -> Json<Envelope> {
-    Json(Envelope {
-        ok,
-        message: message.into(),
-        content,
-        state: core.view(),
-    })
+    Json(Envelope { ok, message: message.into(), content, state: core.view() })
 }
