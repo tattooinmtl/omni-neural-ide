@@ -74,6 +74,9 @@
     body[data-style="ultra"] .bottom-bar button:hover { box-shadow: 0 0 6px var(--glow); }
     .goalbar { display: flex; gap: 6px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
     .goalbar input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 5px 8px; }
+    .nim-panel { height: 120px; background: #010409; border-top: 1px solid var(--border); display: flex; flex-direction: column; }
+    .nim-head { padding: 4px 12px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .nim-log { flex: 1; overflow: auto; padding: 4px 12px; font: 11px ui-monospace, Consolas, monospace; color: #7ee787; }
     .floating { position: fixed; right: 24px; bottom: 60px; width: 300px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px #0006; display: flex; flex-direction: column; z-index: 20; }
     .float-head { padding: 6px 10px; font-size: 11px; cursor: move; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
     .float-body { max-height: 160px; overflow: auto; padding: 6px; font-size: 12px; }
@@ -133,6 +136,10 @@
       </form>
     </div>
   </div>
+  <div class="nim-panel">
+    <div class="nim-head">NIM Sandbox Console (NVIDIA) — write only inside sandbox, read anywhere</div>
+    <div class="nim-log" id="nim-log"><div class="empty">NIM idle. Type /nim &lt;job&gt; in assistant.</div></div>
+  </div>
   <div class="bottom-bar">
     <button>Run</button>
     <button>Debug</button>
@@ -142,6 +149,7 @@
     <span>Phase: <b id="sb-step">idle</b></span>
     <span>Drift: <b id="sb-drift">none</b></span>
     <span>Voice: <b id="sb-voice">Off</b></span>
+    <span>NIM: <b id="sb-nim">idle</b></span>
   </div>
 
   <div class="floating" id="assistant">
