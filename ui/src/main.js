@@ -1,4 +1,6 @@
-const state = { data: null, focus: null, nimLog: [], lastTick: 0 };
+import { mountFace } from "./face.js";
+
+const state = { data: null, focus: null, nimLog: [], face: null };
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -34,6 +36,8 @@ function render(data) {
 
   const mood = data.emotion?.current || "calm";
   $("sb-mood").textContent = mood;
+  $("sb-mood-bar").textContent = mood;
+  if (state.face) state.face.setEmotion(mood);
 
   const files = $("file-list");
   files.innerHTML = "";
@@ -84,6 +88,12 @@ async function openFile(path) {
   await api("/api/open", { method: "POST", body: JSON.stringify({ path }) });
 }
 
+function speakLine(text) {
+  if (!state.face || !text) return;
+  const ms = Math.max(800, text.length * 60);
+  state.face.speak(ms);
+}
+
 $("goalbar").addEventListener("submit", (e) => {
   e.preventDefault();
   const goal = $("goal").value.trim();
@@ -98,31 +108,33 @@ $("save").onclick = () => {
   api("/api/file", { method: "POST", body: JSON.stringify({ path: state.data.focus, content: $("code").value }) });
 };
 
-$("assist-form").addEventListener("submit", (e) => {
+$("assist-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = $("assist-input").value.trim();
   if (!text) return;
   $("assist-input").value = "";
+  let body;
   if (text.startsWith("/note ")) {
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "note", text: text.slice(6) }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "note", text: text.slice(6) }) });
   } else if (text.startsWith("/edit ")) {
     const parts = text.slice(6).split(" ");
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "edit", path: parts[0], content: parts.slice(1).join(" ") }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "edit", path: parts[0], content: parts.slice(1).join(" ") }) });
   } else if (text.startsWith("/scan ")) {
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "scan", path: text.slice(6) }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "scan", path: text.slice(6) }) });
   } else if (text.startsWith("/mkdir ")) {
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mkdir", path: text.slice(7) }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mkdir", path: text.slice(7) }) });
   } else if (text.startsWith("/search ")) {
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "search", text: text.slice(8) }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "search", text: text.slice(8) }) });
   } else if (text.startsWith("/nim ")) {
     const job = text.slice(5);
     state.nimLog.push(`[${new Date().toLocaleTimeString()}] NIM job: ${job}`);
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "nim", text: job }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "nim", text: job }) });
   } else if (text.startsWith("/mood ")) {
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mood", emotion: text.slice(6) }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mood", emotion: text.slice(6) }) });
   } else {
-    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "steer", text }) });
+    body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "steer", text }) });
   }
+  if (body?.message) speakLine(body.message);
 });
 
 $("voice-toggle").onclick = async () => {
@@ -133,7 +145,10 @@ $("mute").onclick = () => {
   const on = !state.data?.settings?.muted;
   api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mute", on }) });
 };
-$("audit").onclick = () => api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "audit" }) });
+$("audit").onclick = async () => {
+  const body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "audit" }) });
+  if (body?.message) speakLine(body.message);
+};
 $("clear-drift").onclick = () => api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "clear-drift" }) });
 $("mark").onclick = () => {
   const code = $("code");
@@ -142,15 +157,17 @@ $("mark").onclick = () => {
 };
 
 document.querySelectorAll(".actions button").forEach((btn) => {
-  btn.onclick = () => {
+  btn.onclick = async () => {
     const action = btn.dataset.action;
     const text = prompt(action + " (enter value):") || "";
     if (!text) return;
-    if (action === "note") api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "note", text }) });
-    else if (action === "steer") api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "steer", text }) });
-    else if (action === "scan") api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "scan", path: text }) });
-    else if (action === "mkdir") api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mkdir", path: text }) });
-    else if (action === "search") api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "search", text }) });
+    let body;
+    if (action === "note") body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "note", text }) });
+    else if (action === "steer") body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "steer", text }) });
+    else if (action === "scan") body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "scan", path: text }) });
+    else if (action === "mkdir") body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mkdir", path: text }) });
+    else if (action === "search") body = await api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "search", text }) });
+    if (body?.message) speakLine(body.message);
   };
 });
 
@@ -193,9 +210,14 @@ $("save-settings").onclick = async () => {
   $("settings").style.display = "none";
 };
 
-// Poll for idle/AFK calls every 30s
 setInterval(() => {
   api("/api/tick", { method: "POST", body: "{}" });
 }, 30000);
+
+// Mount face
+const faceContainer = $("face-container");
+if (faceContainer) {
+  state.face = mountFace(faceContainer);
+}
 
 fetch("/api/state").then((r) => r.json()).then((b) => render(b.state));
