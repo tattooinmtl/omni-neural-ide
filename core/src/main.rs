@@ -10,12 +10,14 @@ mod app;
 mod assistant;
 mod commands;
 mod drift;
+mod emotion;
 mod eventbus;
 mod guard;
 mod harness;
 mod registry;
 mod server;
 mod settings;
+mod tts;
 mod window;
 
 use anyhow::Context;

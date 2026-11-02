@@ -1,4 +1,4 @@
-const state = { data: null, focus: null, nimLog: [] };
+const state = { data: null, focus: null, nimLog: [], lastTick: 0 };
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -31,6 +31,9 @@ function render(data) {
   $("reject").hidden = !data.run?.awaiting_review;
   $("continue").hidden = !data.run?.paused;
   $("code").style.fontSize = `${s.font_size || 13}px`;
+
+  const mood = data.emotion?.current || "calm";
+  $("sb-mood").textContent = mood;
 
   const files = $("file-list");
   files.innerHTML = "";
@@ -69,7 +72,6 @@ function render(data) {
   }
   transcript.scrollTop = transcript.scrollHeight;
 
-  // NIM console
   const nim = $("nim-log");
   if (nim) {
     nim.innerHTML = state.nimLog.map((l) => `<div>${l}</div>`).join("") || '<div class="empty">NIM idle</div>';
@@ -116,6 +118,8 @@ $("assist-form").addEventListener("submit", (e) => {
     const job = text.slice(5);
     state.nimLog.push(`[${new Date().toLocaleTimeString()}] NIM job: ${job}`);
     api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "nim", text: job }) });
+  } else if (text.startsWith("/mood ")) {
+    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mood", emotion: text.slice(6) }) });
   } else {
     api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "steer", text }) });
   }
@@ -188,5 +192,10 @@ $("save-settings").onclick = async () => {
   await api("/api/settings", { method: "POST", body: JSON.stringify(next) });
   $("settings").style.display = "none";
 };
+
+// Poll for idle/AFK calls every 30s
+setInterval(() => {
+  api("/api/tick", { method: "POST", body: "{}" });
+}, 30000);
 
 fetch("/api/state").then((r) => r.json()).then((b) => render(b.state));
