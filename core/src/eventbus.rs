@@ -1,7 +1,12 @@
-use serde::{Serialize, Deserialize};
+//! Graph events the neural view listens to.
+
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
+const GRAPH_BUFFER: usize = 256;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum GraphEvent {
     ToolCalled { tool: String, project: String },
     FileTouched { path: String, project: String },
@@ -11,13 +16,14 @@ pub enum GraphEvent {
     StepFinished { step: String },
 }
 
+#[derive(Clone, Debug)]
 pub struct EventBus {
     tx: broadcast::Sender<GraphEvent>,
 }
 
 impl EventBus {
     pub fn new() -> Self {
-        let (tx, _) = broadcast::channel(256);
+        let (tx, _) = broadcast::channel(GRAPH_BUFFER);
         Self { tx }
     }
 
@@ -31,5 +37,7 @@ impl EventBus {
 }
 
 impl Default for EventBus {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
