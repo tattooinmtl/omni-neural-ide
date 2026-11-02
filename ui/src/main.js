@@ -1,5 +1,6 @@
 import { mountFace } from "./face.js";
 
+const APP_VERSION = "v0.3.0";
 const state = { data: null, focus: null, nimLog: [], face: null };
 const $ = (id) => document.getElementById(id);
 
@@ -21,8 +22,10 @@ function render(data) {
   const s = data.settings || {};
   document.body.dataset.theme = s.theme === "light" ? "light" : "dark";
   document.body.dataset.style = s.version_style === "plain" ? "plain" : "ultra";
-  $("app-title").textContent = s.version_style === "plain" ? "OMNI-CODE" : "OMNI-CODE Ultra";
-  $("style-name").textContent = s.version_style === "plain" ? "Plain" : "Ultra";
+  const isPlain = s.version_style === "plain";
+  $("app-title").textContent = isPlain ? "OMNI-CODE" : "OMNI-CODE Ultra";
+  $("app-version").textContent = APP_VERSION;
+  $("style-name").textContent = isPlain ? "Plain" : "Ultra";
   $("sb-theme").textContent = s.theme === "light" ? "Light" : "Dark";
   $("sb-voice").textContent = s.voice_mode ? (s.muted ? "Muted" : "On") : "Off";
   $("sb-step").textContent = data.run?.phase || "idle";
@@ -214,7 +217,6 @@ setInterval(() => {
   api("/api/tick", { method: "POST", body: "{}" });
 }, 30000);
 
-// Mount face
 const faceContainer = $("face-container");
 if (faceContainer) {
   state.face = mountFace(faceContainer);
