@@ -4,31 +4,63 @@
   <meta charset="UTF-8" />
   <title>OMNI-CODE Ultra</title>
   <style>
-    body { margin: 0; background: #0a0a12; color: #e0e0e0; font-family: system-ui, sans-serif; }
-    #app { display: flex; height: 100vh; }
-    #explorer, #chat { width: 240px; background: #11111a; padding: 10px; }
-    #editor { flex: 1; display: flex; flex-direction: column; }
-    #tabs { background: #0e0e18; padding: 6px; }
-    .tab { display: inline-block; padding: 6px 12px; background: #1a1a2e; margin-right: 4px; }
-    #code { flex: 1; padding: 12px; font-family: ui-monospace, monospace; }
-    button { background: #1a1a2e; color: #00ffcc; border: 1px solid #333; padding: 6px 10px; margin: 2px; }
+    :root {
+      --bg: #0d0d14; --panel: #14141f; --panel-2: #1a1a28; --border: #2a2a3a;
+      --accent: #00d4c8; --text: #e6e6f0; --text-dim: #8888a0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; overflow: hidden; }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+    #titlebar { height: 36px; background: #101018; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; font-weight: 600; }
+    #titlebar span { color: var(--accent); margin-left: 6px; }
+    #main { display: flex; flex: 1; min-height: 0; }
+    #explorer, #chat { width: 250px; background: var(--panel); border-right: 1px solid var(--border); padding: 12px; overflow: auto; }
+    #chat { border-right: none; border-left: 1px solid var(--border); }
+    #center { flex: 1; display: flex; flex-direction: column; }
+    #tabs { background: #101018; padding: 0 8px; display: flex; gap: 2px; border-bottom: 1px solid var(--border); height: 36px; align-items: flex-end; }
+    .tab { padding: 8px 14px; background: var(--panel-2); border-radius: 6px 6px 0 0; color: var(--text-dim); }
+    .tab.active { background: var(--bg); color: var(--text); }
+    #code { flex: 1; padding: 16px 20px; font-family: ui-monospace, monospace; overflow: auto; }
+    #bottom { height: 180px; background: var(--panel); border-top: 1px solid var(--border); display: flex; }
+    #problems, #timeline { flex: 1; padding: 10px 14px; overflow: auto; }
+    #statusbar { height: 26px; background: #101018; border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; font-size: 11.5px; color: var(--text-dim); gap: 18px; }
+    button { background: var(--panel-2); color: var(--accent); border: 1px solid var(--border); padding: 5px 12px; border-radius: 4px; cursor: pointer; }
+    #palette { display: none; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); width: 520px; background: #1c1c2e; border: 1px solid var(--border); border-radius: 8px; z-index: 100; }
+    #palette input { width: 100%; padding: 12px 14px; background: transparent; color: var(--text); border: none; border-bottom: 1px solid var(--border); outline: none; }
+    #palette .item { padding: 9px 14px; cursor: pointer; }
+    #palette .item:hover { background: #00d4c822; }
+    #toasts { position: fixed; top: 16px; right: 16px; z-index: 200; }
+    .toast { background: #1c1c2e; border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 10px 14px; margin-bottom: 8px; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div id="app">
-    <div id="explorer"><strong>EXPLORER</strong></div>
-    <div id="editor">
-      <div id="tabs"><span class="tab">app.ts ×</span><span class="tab">plan.md ×</span></div>
-      <div id="code">// OMNI-CODE editor</div>
-    </div>
-    <div id="chat">
-      <strong>OMNI CHAT</strong>
-      <div>
-        <button id="voice-toggle">Voice Off</button><br>
+    <div id="titlebar">OMNI-CODE <span>Ultra</span></div>
+    <div id="main">
+      <div id="explorer"><div style="color:#888;font-size:11px;margin-bottom:6px">EXPLORER</div>src/<br>plan.md</div>
+      <div id="center">
+        <div id="tabs"><span class="tab active">app.ts</span><span class="tab">plan.md</span></div>
+        <div id="code">// OMNI-CODE Ultra</div>
+      </div>
+      <div id="chat">
+        <div style="color:#888;font-size:11px;margin-bottom:8px">ASSISTANT</div>
+        <button id="voice-toggle">Voice Off</button>
         <button id="mute">Mute</button>
       </div>
     </div>
+    <div id="bottom">
+      <div id="problems"><strong style="color:#888;font-size:11px">PROBLEMS</strong><div id="problem-list"></div></div>
+      <div id="timeline"><strong style="color:#888;font-size:11px">CHECKPOINTS</strong><div id="checkpoint-list"></div></div>
+    </div>
+    <div id="statusbar">
+      <span>Theme <strong id="sb-theme" style="color:#e6e6f0">Dark</strong></span>
+      <span>Voice <strong id="sb-voice" style="color:#e6e6f0">Off</strong></span>
+      <span>Step <strong id="sb-step" style="color:#e6e6f0">scaffold</strong></span>
+      <span>Drift <strong id="sb-drift" style="color:#e6e6f0">none</strong></span>
+    </div>
   </div>
+  <div id="palette"><input id="palette-input" placeholder="Type a command…" /><div id="palette-list"></div></div>
+  <div id="toasts"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
