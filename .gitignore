@@ -1,0 +1,6 @@
+core/target/
+ui/node_modules/
+workspace/
+settings.json
+launcher/omni-launcher.exe
+.playwright-mcp/

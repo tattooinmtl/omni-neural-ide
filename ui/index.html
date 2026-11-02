@@ -3,64 +3,299 @@
 <head>
   <meta charset="UTF-8" />
   <title>OMNI-CODE Ultra</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5' fill='%232ee6d6'/%3E%3C/svg%3E" />
   <style>
     :root {
-      --bg: #0d0d14; --panel: #14141f; --panel-2: #1a1a28; --border: #2a2a3a;
-      --accent: #00d4c8; --text: #e6e6f0; --text-dim: #8888a0;
+      --bg: #0c0e14;
+      --panel: #141821;
+      --panel-2: #1c2230;
+      --border: #2a3344;
+      --accent: #2ee6d6;
+      --amber: #ffb020;
+      --text: #e7edf5;
+      --text-dim: #8b97a8;
+      --danger: #ff6b8a;
+      --ok: #3ddc97;
+    }
+    body[data-theme="light"] {
+      --bg: #f3efe4;
+      --panel: #fffaf1;
+      --panel-2: #e7e1d4;
+      --border: #d5cdb8;
+      --accent: #0e7c74;
+      --amber: #a15c00;
+      --text: #1c1915;
+      --text-dim: #5e584c;
+      --danger: #a1264d;
+      --ok: #0d7a45;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; overflow: hidden; }
-    #app { display: flex; flex-direction: column; height: 100vh; }
-    #titlebar { height: 36px; background: #101018; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; font-weight: 600; }
-    #titlebar span { color: var(--accent); margin-left: 6px; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Aptos, "Segoe UI", sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+    }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    button {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: #123e3b; border-color: var(--accent); color: var(--accent); }
+    body[data-theme="light"] button.primary { background: #d8f3ef; }
+    #graph {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+    body[data-style="plain"] #graph,
+    body.graph-off #graph { display: none; }
+    #app { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100vh; }
+    #titlebar {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      background: color-mix(in srgb, var(--panel) 88%, transparent);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    #titlebar strong { letter-spacing: 0.08em; }
+    #titlebar .mark { color: var(--accent); font-weight: 650; }
+    #titlebar .spacer { flex: 1; }
     #main { display: flex; flex: 1; min-height: 0; }
-    #explorer, #chat { width: 250px; background: var(--panel); border-right: 1px solid var(--border); padding: 12px; overflow: auto; }
-    #chat { border-right: none; border-left: 1px solid var(--border); }
-    #center { flex: 1; display: flex; flex-direction: column; }
-    #tabs { background: #101018; padding: 0 8px; display: flex; gap: 2px; border-bottom: 1px solid var(--border); height: 36px; align-items: flex-end; }
-    .tab { padding: 8px 14px; background: var(--panel-2); border-radius: 6px 6px 0 0; color: var(--text-dim); }
-    .tab.active { background: var(--bg); color: var(--text); }
-    #code { flex: 1; padding: 16px 20px; font-family: ui-monospace, monospace; overflow: auto; }
-    #bottom { height: 180px; background: var(--panel); border-top: 1px solid var(--border); display: flex; }
-    #problems, #timeline { flex: 1; padding: 10px 14px; overflow: auto; }
-    #statusbar { height: 26px; background: #101018; border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; font-size: 11.5px; color: var(--text-dim); gap: 18px; }
-    button { background: var(--panel-2); color: var(--accent); border: 1px solid var(--border); padding: 5px 12px; border-radius: 4px; cursor: pointer; }
-    #palette { display: none; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); width: 520px; background: #1c1c2e; border: 1px solid var(--border); border-radius: 8px; z-index: 100; }
-    #palette input { width: 100%; padding: 12px 14px; background: transparent; color: var(--text); border: none; border-bottom: 1px solid var(--border); outline: none; }
-    #palette .item { padding: 9px 14px; cursor: pointer; }
-    #palette .item:hover { background: #00d4c822; }
-    #toasts { position: fixed; top: 16px; right: 16px; z-index: 200; }
-    .toast { background: #1c1c2e; border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 10px 14px; margin-bottom: 8px; border-radius: 4px; }
+    #explorer, #editor {
+      background: color-mix(in srgb, var(--panel) 78%, transparent);
+      backdrop-filter: blur(8px);
+    }
+    #explorer { width: 240px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    #editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .label {
+      color: var(--text-dim);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      padding: 10px 12px 6px;
+    }
+    #file-list, #problem-list, #checkpoint-list { overflow: auto; padding: 0 8px 8px; }
+    .file, .problem, .checkpoint {
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file:hover, .file.active { background: var(--panel-2); }
+    .problem.warn { color: var(--amber); }
+    #goalbar, #tabs {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    #goal { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; }
+    #code {
+      flex: 1;
+      width: 100%;
+      border: 0;
+      resize: none;
+      background: transparent;
+      padding: 16px 18px;
+      font-family: "Cascadia Code", Consolas, monospace;
+      line-height: 1.5;
+      outline: none;
+    }
+    #bottom { height: 148px; display: flex; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 88%, transparent); }
+    #problems, #timeline { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+    #timeline { border-left: 1px solid var(--border); }
+    #statusbar {
+      height: 28px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 0 12px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      background: #10141c;
+    }
+    body[data-theme="light"] #statusbar { background: #e6e0d2; }
+    #statusbar b { color: var(--text); font-weight: 600; }
+    #assistant {
+      position: fixed;
+      z-index: 20;
+      right: 22px;
+      bottom: 48px;
+      width: 340px;
+      height: 460px;
+      display: flex;
+      flex-direction: column;
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(12px);
+      overflow: hidden;
+    }
+    #assistant header {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      cursor: grab;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    }
+    #assistant header span { color: var(--accent); font-weight: 650; }
+    #transcript { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .line { padding: 6px 8px; border-radius: 8px; background: var(--panel-2); white-space: pre-wrap; }
+    .line.you { background: transparent; border: 1px solid var(--border); }
+    #assist-form, #assist-tools { display: flex; gap: 6px; padding: 8px; }
+    #assist-form input { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+    #palette, #settings {
+      position: fixed;
+      z-index: 30;
+      display: none;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+    #palette { top: 64px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); }
+    #palette input, #settings input, #settings select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    #palette-list { max-height: 280px; overflow: auto; }
+    #palette .item { padding: 8px 12px; cursor: pointer; }
+    #palette .item:hover, #palette .item.active { background: var(--panel-2); }
+    #settings { top: 52px; left: 260px; width: min(440px, calc(100vw - 280px)); max-height: calc(100vh - 80px); overflow: auto; padding: 12px 14px 16px; }
+    #settings h2 { margin: 14px 0 6px; font-size: 13px; }
+    #settings label { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 5px 0; }
+    #settings label input[type="checkbox"] { width: auto; }
+    #toasts { position: fixed; z-index: 40; right: 16px; top: 52px; display: flex; flex-direction: column; gap: 8px; }
+    .toast { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; max-width: 320px; }
+    .toast.bad { border-color: var(--danger); }
+    .empty { color: var(--text-dim); padding: 8px; }
+    #context-menu {
+      position: fixed;
+      z-index: 60;
+      min-width: 188px;
+      padding: 4px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+    #context-menu:not([hidden]) { display: flex; flex-direction: column; }
+    #context-menu .menu-title {
+      color: var(--text-dim);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 6px 10px 4px;
+    }
+    #context-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-radius: 6px;
+      padding: 7px 10px;
+    }
+    #context-menu button:hover:not(:disabled) { background: var(--panel-2); }
+    #context-menu button:disabled { color: var(--text-dim); cursor: default; }
+    #context-menu .sep { height: 1px; margin: 4px 8px; background: var(--border); }
   </style>
 </head>
-<body>
+<body data-theme="dark" data-style="ultra">
+  <canvas id="graph"></canvas>
   <div id="app">
-    <div id="titlebar">OMNI-CODE <span>Ultra</span></div>
+    <div id="titlebar">
+      <strong>OMNI-CODE</strong>
+      <span class="mark" id="style-name">Ultra</span>
+      <span class="spacer"></span>
+      <button id="open-settings" type="button">Settings</button>
+    </div>
     <div id="main">
-      <div id="explorer"><div style="color:#888;font-size:11px;margin-bottom:6px">EXPLORER</div>src/<br>plan.md</div>
-      <div id="center">
-        <div id="tabs"><span class="tab active">app.ts</span><span class="tab">plan.md</span></div>
-        <div id="code">// OMNI-CODE Ultra</div>
-      </div>
-      <div id="chat">
-        <div style="color:#888;font-size:11px;margin-bottom:8px">ASSISTANT</div>
-        <button id="voice-toggle">Voice Off</button>
-        <button id="mute">Mute</button>
-      </div>
+      <aside id="explorer">
+        <div class="label">EXPLORER</div>
+        <div id="file-list"></div>
+      </aside>
+      <section id="editor">
+        <form id="goalbar">
+          <input id="goal" placeholder="Goal for the main agent" />
+          <button class="primary" id="run" type="submit">Run</button>
+          <button id="accept" type="button" hidden>Accept</button>
+          <button id="reject" type="button" hidden>Reject</button>
+          <button id="continue" type="button" hidden>Continue</button>
+        </form>
+        <div id="tabs"><span class="label" id="tab-name">no file</span><span class="spacer"></span><button id="save" type="button">Save</button></div>
+        <textarea id="code" spellcheck="false" placeholder="Open a file from the explorer. The harness writes plan.md when you run a goal."></textarea>
+      </section>
     </div>
     <div id="bottom">
-      <div id="problems"><strong style="color:#888;font-size:11px">PROBLEMS</strong><div id="problem-list"></div></div>
-      <div id="timeline"><strong style="color:#888;font-size:11px">CHECKPOINTS</strong><div id="checkpoint-list"></div></div>
+      <div id="problems">
+        <div class="label">PROBLEMS</div>
+        <div id="problem-list"></div>
+      </div>
+      <div id="timeline">
+        <div class="label">CHECKPOINTS</div>
+        <div id="checkpoint-list"></div>
+      </div>
     </div>
-    <div id="statusbar">
-      <span>Theme <strong id="sb-theme" style="color:#e6e6f0">Dark</strong></span>
-      <span>Voice <strong id="sb-voice" style="color:#e6e6f0">Off</strong></span>
-      <span>Step <strong id="sb-step" style="color:#e6e6f0">scaffold</strong></span>
-      <span>Drift <strong id="sb-drift" style="color:#e6e6f0">none</strong></span>
-    </div>
+    <footer id="statusbar">
+      <span>Theme <b id="sb-theme">Dark</b></span>
+      <span>Voice <b id="sb-voice">Off</b></span>
+      <span>Step <b id="sb-step">idle</b></span>
+      <span>Drift <b id="sb-drift">none</b></span>
+    </footer>
   </div>
-  <div id="palette"><input id="palette-input" placeholder="Type a command…" /><div id="palette-list"></div></div>
+
+  <section id="assistant" aria-label="Assistant">
+    <header id="assist-drag">
+      <span>Assistant</span>
+      <span class="spacer"></span>
+      <button id="voice-toggle" type="button">Voice Off</button>
+      <button id="mute" type="button">Mute</button>
+    </header>
+    <div id="transcript"></div>
+    <div id="assist-tools">
+      <button id="mark" type="button">Mark this</button>
+      <button id="audit" type="button">Audit</button>
+      <button id="clear-drift" type="button">Clear drift</button>
+    </div>
+    <form id="assist-form">
+      <input id="assist-input" placeholder="Steer the main agent" />
+      <button class="primary" type="submit">Steer</button>
+    </form>
+  </section>
+
+  <div id="palette">
+    <input id="palette-input" placeholder="Type a command…" />
+    <div id="palette-list"></div>
+  </div>
+  <aside id="settings"></aside>
   <div id="toasts"></div>
+  <div id="context-menu" hidden role="menu"></div>
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/build/three.module.js" } }
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
