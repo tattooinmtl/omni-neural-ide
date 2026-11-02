@@ -13,13 +13,25 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Error "Git is required. Install from https://git-scm.com/"
 }
 
+$isRepo = $false
 if (Test-Path $InstallRoot) {
-    Write-Host "Updating existing install..."
+    Push-Location $InstallRoot
+    git rev-parse --is-inside-work-tree 2>$null
+    if ($LASTEXITCODE -eq 0) { $isRepo = $true }
+    Pop-Location
+}
+
+if ($isRepo) {
+    Write-Host "Updating existing install..." -ForegroundColor Yellow
     Push-Location $InstallRoot
     git pull
     Pop-Location
 } else {
-    Write-Host "Cloning repository..."
+    if (Test-Path $InstallRoot) {
+        Write-Host "Existing folder is not a git repo. Replacing..." -ForegroundColor Yellow
+        Remove-Item -Recurse -Force $InstallRoot
+    }
+    Write-Host "Cloning repository..." -ForegroundColor Yellow
     git clone $RepoUrl $InstallRoot
 }
 
