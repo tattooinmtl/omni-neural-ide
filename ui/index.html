@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OMNI-CODE Ultra</title>
+  <style>
+    body { margin: 0; background: #0a0a12; color: #e0e0e0; font-family: system-ui, sans-serif; }
+    #app { display: flex; height: 100vh; }
+    #explorer, #chat { width: 240px; background: #11111a; padding: 10px; }
+    #editor { flex: 1; display: flex; flex-direction: column; }
+    #tabs { background: #0e0e18; padding: 6px; }
+    .tab { display: inline-block; padding: 6px 12px; background: #1a1a2e; margin-right: 4px; }
+    #code { flex: 1; padding: 12px; font-family: ui-monospace, monospace; }
+    button { background: #1a1a2e; color: #00ffcc; border: 1px solid #333; padding: 6px 10px; margin: 2px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="explorer"><strong>EXPLORER</strong></div>
+    <div id="editor">
+      <div id="tabs"><span class="tab">app.ts ×</span><span class="tab">plan.md ×</span></div>
+      <div id="code">// OMNI-CODE editor</div>
+    </div>
+    <div id="chat">
+      <strong>OMNI CHAT</strong>
+      <div>
+        <button id="voice-toggle">Voice Off</button><br>
+        <button id="mute">Mute</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
