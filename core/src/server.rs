@@ -1,6 +1,7 @@
 //! Loopback HTTP API and the static shell.
 
 use crate::app::Core;
+use crate::emotion::Emotion;
 use crate::eventbus::EventBus;
 use crate::settings::Settings;
 use axum::extract::{Query, State};
@@ -60,6 +61,8 @@ struct AssistantBody {
     content: String,
     #[serde(default)]
     on: Option<bool>,
+    #[serde(default)]
+    emotion: Option<String>,
 }
 
 pub async fn serve(core: Core, port: u16) -> anyhow::Result<()> {
@@ -69,6 +72,7 @@ pub async fn serve(core: Core, port: u16) -> anyhow::Result<()> {
     let router = Router::new()
         .route("/api/health", get(health))
         .route("/api/state", get(state_of))
+        .route("/api/tick", post(tick))
         .route("/api/intake", post(intake))
         .route("/api/resume", post(resume))
         .route("/api/review", post(review))
@@ -93,6 +97,13 @@ async fn health() -> Json<serde_json::Value> {
 async fn state_of(State(app): State<AppState>) -> Json<Envelope> {
     let core = lock(&app);
     reply(&core, true, "ok", None)
+}
+
+async fn tick(State(app): State<AppState>) -> Json<Envelope> {
+    let mut core = lock(&app);
+    let line = core.tick_emotion();
+    let msg = line.unwrap_or_else(|| "ok".into());
+    reply(&core, true, msg, None)
 }
 
 async fn intake(State(app): State<AppState>, Json(body): Json<GoalBody>) -> Json<Envelope> {
@@ -133,6 +144,12 @@ async fn command(State(app): State<AppState>, Json(body): Json<LineBody>) -> Jso
 
 async fn assistant(State(app): State<AppState>, Json(body): Json<AssistantBody>) -> Json<Envelope> {
     let mut core = lock(&app);
+    core.emotion.user_talked();
+    if let Some(em) = body.emotion.as_deref() {
+        if let Some(parsed) = parse_emotion(em) {
+            core.set_emotion(parsed);
+        }
+    }
     let result = match body.action.as_str() {
         "note" => core.assistant_note(&body.text),
         "steer" => Ok(core.steer(&body.text)),
@@ -151,12 +168,24 @@ async fn assistant(State(app): State<AppState>, Json(body): Json<AssistantBody>)
             core.set_muted(muted)
         }
         "clear-drift" => Ok(core.clear_drift_flag()),
+        "mood" => {
+            if let Some(em) = body.emotion.as_deref().and_then(parse_emotion) {
+                core.set_emotion(em);
+                Ok(format!("mood: {}", core.emotion.current.name()))
+            } else {
+                Ok(format!("current mood: {}", core.emotion.current.name()))
+            }
+        }
         other => Err(format!("unknown assistant action: {other}")),
     };
     match result {
         Ok(m) => reply(&core, true, m, None),
         Err(err) => reply(&core, false, err, None),
     }
+}
+
+fn parse_emotion(s: &str) -> Option<Emotion> {
+    Emotion::all().iter().find(|e| e.name() == s).cloned()
 }
 
 async fn open_file(State(app): State<AppState>, Json(body): Json<PathBody>) -> Json<Envelope> {
