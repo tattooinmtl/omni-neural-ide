@@ -1,4 +1,4 @@
-const state = { data: null, focus: null };
+const state = { data: null, focus: null, nimLog: [] };
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -68,6 +68,13 @@ function render(data) {
     floatT.appendChild(row2);
   }
   transcript.scrollTop = transcript.scrollHeight;
+
+  // NIM console
+  const nim = $("nim-log");
+  if (nim) {
+    nim.innerHTML = state.nimLog.map((l) => `<div>${l}</div>`).join("") || '<div class="empty">NIM idle</div>';
+    nim.scrollTop = nim.scrollHeight;
+  }
 }
 
 async function openFile(path) {
@@ -94,7 +101,6 @@ $("assist-form").addEventListener("submit", (e) => {
   const text = $("assist-input").value.trim();
   if (!text) return;
   $("assist-input").value = "";
-  // Default: steer. Prefixes: /note, /edit, /scan, /mkdir, /search
   if (text.startsWith("/note ")) {
     api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "note", text: text.slice(6) }) });
   } else if (text.startsWith("/edit ")) {
@@ -106,6 +112,10 @@ $("assist-form").addEventListener("submit", (e) => {
     api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "mkdir", path: text.slice(7) }) });
   } else if (text.startsWith("/search ")) {
     api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "search", text: text.slice(8) }) });
+  } else if (text.startsWith("/nim ")) {
+    const job = text.slice(5);
+    state.nimLog.push(`[${new Date().toLocaleTimeString()}] NIM job: ${job}`);
+    api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "nim", text: job }) });
   } else {
     api("/api/assistant", { method: "POST", body: JSON.stringify({ action: "steer", text }) });
   }
@@ -140,7 +150,6 @@ document.querySelectorAll(".actions button").forEach((btn) => {
   };
 });
 
-// Drag floating window
 const drag = $("assist-drag");
 let dragAt = null;
 drag.addEventListener("pointerdown", (e) => {
@@ -180,5 +189,4 @@ $("save-settings").onclick = async () => {
   $("settings").style.display = "none";
 };
 
-// Initial load
 fetch("/api/state").then((r) => r.json()).then((b) => render(b.state));
