@@ -77,9 +77,10 @@
     .nim-panel { height: 120px; background: #010409; border-top: 1px solid var(--border); display: flex; flex-direction: column; }
     .nim-head { padding: 4px 12px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .nim-log { flex: 1; overflow: auto; padding: 4px 12px; font: 11px ui-monospace, Consolas, monospace; color: #7ee787; }
-    .floating { position: fixed; right: 24px; bottom: 60px; width: 300px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px #0006; display: flex; flex-direction: column; z-index: 20; }
+    .floating { position: fixed; right: 24px; bottom: 60px; width: 320px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px #0006; display: flex; flex-direction: column; z-index: 20; }
     .float-head { padding: 6px 10px; font-size: 11px; cursor: move; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
-    .float-body { max-height: 160px; overflow: auto; padding: 6px; font-size: 12px; }
+    .float-face { display: flex; justify-content: center; padding: 4px; background: #0a0c10; }
+    .float-body { max-height: 140px; overflow: auto; padding: 6px; font-size: 12px; }
     .actions { display: flex; gap: 4px; padding: 6px; flex-wrap: wrap; }
     .actions button { background: var(--border); color: var(--text); border: 0; border-radius: 4px; padding: 3px 7px; font-size: 10px; cursor: pointer; }
     .empty { color: var(--muted); font-size: 12px; padding: 8px; }
@@ -162,6 +163,7 @@
         <button id="clear-drift" style="font-size: 10px;">Clear Drift</button>
       </span>
     </div>
+    <div class="float-face" id="face-container"></div>
     <div class="float-body" id="float-transcript"></div>
     <div class="actions">
       <button data-action="note">Note</button>
