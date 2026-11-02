@@ -2,6 +2,7 @@
 
 use crate::assistant::Desk;
 use crate::drift::{self, DriftFlag};
+use crate::emotion::{Emotion, EmotionState};
 use crate::eventbus::EventBus;
 use crate::guard::{self, Action, Request};
 use crate::harness::{Checkpoint, Harness, LoopConfig};
@@ -30,6 +31,7 @@ pub struct StateDto {
     pub registry: Registry,
     pub run: RunDto,
     pub assistant: Desk,
+    pub emotion: EmotionState,
     pub files: Vec<String>,
     pub focus: Option<String>,
     pub problems: Vec<String>,
@@ -44,7 +46,9 @@ pub struct Core {
     pub bus: EventBus,
     pub harness: Harness,
     pub desk: Desk,
+    pub emotion: EmotionState,
     pub focus: Option<String>,
+    pub username: String,
 }
 
 impl Core {
@@ -63,6 +67,7 @@ impl Core {
         let mut harness = harness;
         harness.load_checkpoints();
         let desk = Desk::new(settings.voice_mode, settings.muted);
+        let username = std::env::var("USERNAME").unwrap_or_else(|_| "there".into());
         Self {
             install_root,
             settings_path,
@@ -71,7 +76,9 @@ impl Core {
             bus,
             harness,
             desk,
+            emotion: EmotionState::default(),
             focus: None,
+            username,
         }
     }
 
@@ -102,6 +109,7 @@ impl Core {
                 result: self.harness.result.clone(),
             },
             assistant: self.desk.clone(),
+            emotion: self.emotion.clone(),
             files: workspace_files(&self.harness.workspace),
             focus: self.focus.clone(),
             problems,
@@ -115,6 +123,7 @@ impl Core {
         }
         self.push_config();
         self.harness.start(goal)?;
+        self.emotion.user_talked();
         self.desk.say("you", goal.trim());
         let phase = self.harness.phase.as_str();
         self.desk.say("assistant", &format!("Main agent is at {phase}."));
@@ -165,9 +174,51 @@ impl Core {
         Ok(self.harness.workspace.join(relative))
     }
 
+    /// Check idle/AFK and emit a line if needed.
+    pub fn tick_emotion(&mut self) -> Option<String> {
+        if self.emotion.should_call_afk() {
+            self.emotion.last_idle_call = now_secs();
+            let line = self.emotion.idle_line(&self.username);
+            self.desk.say("assistant", &line);
+            self.write_diary(&line);
+            return Some(line);
+        }
+        if self.emotion.should_check_in() {
+            self.emotion.last_idle_call = now_secs();
+            let line = self.emotion.check_in_line(&self.username);
+            self.desk.say("assistant", &line);
+            self.write_diary(&line);
+            return Some(line);
+        }
+        None
+    }
+
+    pub fn write_diary(&mut self, note: &str) {
+        let path = self.harness.workspace.join("nim_diary.md");
+        let entry = self.emotion.diary_entry(note);
+        let mut body = fs::read_to_string(&path).unwrap_or_else(|_| "# NIM Diary\n".into());
+        if !body.ends_with('\n') {
+            body.push('\n');
+        }
+        body.push_str(&entry);
+        let _ = fs::write(path, body);
+    }
+
+    pub fn set_emotion(&mut self, emotion: Emotion) {
+        self.emotion.shift_toward(emotion);
+        self.desk.say("assistant", &format!("(mood: {})", emotion.name()));
+    }
+
     fn push_config(&mut self) {
         self.harness.set_config(config_from(&self.settings));
     }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 pub fn locate_install_root() -> PathBuf {
