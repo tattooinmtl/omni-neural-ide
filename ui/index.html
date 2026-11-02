@@ -15,6 +15,7 @@
       --green: #3fb950;
       --red: #f85149;
       --activity: #010409;
+      --caret: #e6edf3;
     }
     body[data-theme="light"] {
       --bg: #ffffff;
@@ -26,6 +27,7 @@
       --green: #1a7f37;
       --red: #cf222e;
       --activity: #f6f8fa;
+      --caret: #24292f;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, Segoe UI, sans-serif; }
@@ -47,7 +49,8 @@
     .tab { padding: 0 14px; display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border); font-size: 12px; }
     .tab.active { background: var(--bg); }
     .editor-body { flex: 1; display: flex; min-height: 0; }
-    textarea { flex: 1; border: 0; resize: none; background: var(--bg); color: var(--text); font: 13px/1.5 ui-monospace, Consolas, monospace; padding: 12px; outline: none; }
+    textarea { flex: 1; border: 0; resize: none; background: var(--bg); color: var(--text); font: 13px/1.5 ui-monospace, Consolas, monospace; padding: 12px; outline: none; caret-color: var(--caret); }
+    input { caret-color: var(--caret); }
     .chat { background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
     .chat-head { padding: 8px 12px; font-size: 11px; letter-spacing: 0.5px; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
     .transcript { flex: 1; overflow: auto; padding: 8px; }
