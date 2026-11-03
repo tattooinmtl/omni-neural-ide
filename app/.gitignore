@@ -1,0 +1,8 @@
+node_modules/
+ui/node_modules/
+ui/dist/
+core/target/
+dist/launcher
+dist/omni-core
+*.log
+shots/_*.png
