@@ -200,8 +200,23 @@ body.mode-plain .statusbar .ultra-only{display:none}
 .review-gate button.ok{background:#166534;border-color:#166534}
 .review-gate button.bad{background:#7f1d1d;border-color:#7f1d1d}
 .resizer-v{width:3px;cursor:col-resize}
-::-webkit-scrollbar{width:10px;height:10px}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:6px}
+html, body { color-scheme: dark; }
+::-webkit-scrollbar{width:10px;height:10px;background:#0a1218}
+::-webkit-scrollbar-track{background:#0a1218}
+::-webkit-scrollbar-thumb{background:#1e2e3e;border-radius:6px;border:2px solid #0a1218}
+::-webkit-scrollbar-thumb:hover{background:#2a3e52}
+::-webkit-scrollbar-corner{background:#0a1218}
+::-webkit-scrollbar-button{display:none;width:0;height:0;background:transparent}
+* { scrollbar-width: thin; scrollbar-color: #1e2e3e #0a1218; }
+input, select, textarea, button { color-scheme: dark; }
+select, input[type="text"], input[type="password"], input[type="number"], textarea {
+  background:#061018; color:#e8eef4; border-color:#1e2e3e;
+}
+select option { background:#0d151c; color:#e8eef4; }
+.settings-overlay, .settings-shell, .settings-page, .settings-cats {
+  color-scheme: dark;
+  scrollbar-color: #1e2e3e #0a1218;
+}
 
 /* hide live-chrome opacity hacks from old strip approach */
 .live-chrome,.live-menu,.live-act,.live-status{opacity:1!important;pointer-events:auto!important}
@@ -235,7 +250,7 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 .settings-shell{width:min(920px,94vw);height:min(620px,86vh);background:#0d151c;border:1px solid #1e2e3e;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .settings-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1e2e3e;color:#e8eef4;font-weight:600}
 .settings-close{color:#9aa7b5;font-size:16px;padding:4px 8px}
-.settings-close:hover{color:#fff}
+.settings-close:hover{color:#00ff88}
 .settings-body{flex:1;display:flex;min-height:0}
 .settings-cats{width:220px;min-width:220px;background:#0a1218;border-right:1px solid #1e2e3e;padding:8px;overflow:auto;display:flex;flex-direction:column;gap:2px}
 .settings-cat{text-align:left;padding:8px 12px;border-radius:6px;color:#9aa7b5;font-size:13px}
@@ -261,3 +276,12 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 .settings-list li{display:flex;gap:12px;align-items:center;font-size:13px;color:#c5d0da}
 .settings-list kbd{background:#121c26;border:1px solid #243040;border-radius:4px;padding:2px 6px;font-size:11px;color:#7dd3fc}
 .settings-providers{max-width:480px}
+
+.settings-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239aa7b5' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}

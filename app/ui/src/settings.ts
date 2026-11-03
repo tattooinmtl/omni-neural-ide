@@ -116,7 +116,7 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.0.2</p>
+          <p><strong>OMNI-CODE</strong> v1.0.3</p>
           <p class="settings-hint">Go launcher → Rust core → native WebView2. No Electron.</p>
           <p class="settings-hint">Install: %USERPROFILE%\\.omni-neural-ide</p>`;
         break;

@@ -1,5 +1,5 @@
 // OMNI-CODE native Win32 splash launcher — custom-painted, no browser, no white chrome.
-// Structure leaves room for a future face-animation overlay in paintSplash().
+// paintSplash leaves room for a future face-animation overlay above the controls.
 package main
 
 import (
@@ -19,26 +19,28 @@ import (
 //go:embed embed/omni-logo.bmp
 var logoFS embed.FS
 
-const version = "1.0.2"
+const version = "1.0.3"
 
-// Brand green (#00FF88)
+// Brand green (#00FF88) and navy matching the logo plate.
 var colorGreen = win.RGB(0x00, 0xff, 0x88)
 var colorGreenDim = win.RGB(0x00, 0xc0, 0x66)
-var colorDarkPanel = win.RGB(0x06, 0x10, 0x18)
-var colorBtnBorder = win.RGB(0x00, 0xff, 0x88)
+var colorNavy = win.RGB(0x05, 0x0a, 0x15)
+var colorPanel = win.RGB(0x06, 0x10, 0x18)
+var colorBtnFill = win.RGB(0x08, 0x18, 0x12)
+var colorBtnHover = win.RGB(0x0c, 0x2a, 0x1c)
 
 type splashState struct {
-	wnd       *ui.Main
-	modeUltra bool
-	hover     int // 0 none, 1 plain, 2 ultra, 3 launch, 4 cancel
-	bgBmp     win.HBITMAP
-	bgW, bgH  int
-	fontTitle win.HFONT
-	fontBody  win.HFONT
-	resultOK  bool
+	wnd        *ui.Main
+	modeUltra  bool
+	hover      int // 0 none, 1 plain, 2 ultra, 3 launch, 4 cancel
+	bgBmp      win.HBITMAP
+	bgW, bgH   int
+	fontTitle  win.HFONT
+	fontBody   win.HFONT
+	resultOK   bool
 	resultMode string
-	install   string
-	logf      *os.File
+	install    string
+	logf       *os.File
 }
 
 func main() {
@@ -73,7 +75,7 @@ func main() {
 }
 
 func showSplash(install string, logf *os.File, log func(string, ...any)) *splashState {
-	st := &splashState{install: install, logf: logf, modeUltra: false}
+	st := &splashState{install: install, logf: logf}
 
 	bmpPath := ensureLogoFile(install)
 	if bmpPath != "" {
@@ -94,30 +96,30 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 	}
 
 	var lf win.LOGFONT
-	lf.Height = -22
+	lf.Height = -20
 	lf.Weight = co.FW_SEMIBOLD
 	lf.CharSet = co.CHARSET_DEFAULT
 	lf.SetFaceName("Segoe UI")
 	if f, err := win.CreateFontIndirect(&lf); err == nil {
 		st.fontTitle = f
 	}
-	lf.Height = -16
+	lf.Height = -15
 	lf.Weight = co.FW_NORMAL
 	if f, err := win.CreateFontIndirect(&lf); err == nil {
 		st.fontBody = f
 	}
 
-	brush, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: win.RGB(0x05, 0x0a, 0x15)})
+	brush, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: colorNavy})
 	opts := ui.OptsMain().
 		Title("OMNI-CODE Launcher " + version).
-		Size(ui.Dpi(560, 420)).
+		Size(ui.Dpi(560, 560)).
 		Center(true)
 	if brush != 0 {
 		opts = opts.ClassBrush(brush)
 	}
 	st.wnd = ui.NewMain(opts)
 
-	st.wnd.On().WmEraseBkgnd(func(_ ui.WmEraseBkgnd) int { return 1 }) // we paint everything
+	st.wnd.On().WmEraseBkgnd(func(_ ui.WmEraseBkgnd) int { return 1 })
 	st.wnd.On().WmPaint(func() { st.paintSplash() })
 	st.wnd.On().WmMouseMove(func(p ui.WmMouse) {
 		pt := p.Pos()
@@ -165,36 +167,77 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 
 func ensureLogoFile(install string) string {
 	dest := filepath.Join(install, "assets", "omni-logo.bmp")
-	if st, err := os.Stat(dest); err == nil && st.Size() > 1000 {
+	b, err := logoFS.ReadFile("embed/omni-logo.bmp")
+	if err == nil {
+		_ = os.MkdirAll(filepath.Dir(dest), 0o755)
+		// Refresh asset when embed is newer/larger (quality upgrade)
+		if st, e := os.Stat(dest); e != nil || st.Size() != int64(len(b)) {
+			_ = os.WriteFile(dest, b, 0o644)
+		}
 		return dest
 	}
-	b, err := logoFS.ReadFile("embed/omni-logo.bmp")
-	if err != nil {
-		// try beside exe
-		cand := filepath.Join(besideLauncher(), "..", "assets", "omni-logo.bmp")
-		if _, e := os.Stat(cand); e == nil {
-			return cand
-		}
-		return ""
+	cand := filepath.Join(besideLauncher(), "..", "assets", "omni-logo.bmp")
+	if _, e := os.Stat(cand); e == nil {
+		return cand
 	}
-	_ = os.MkdirAll(filepath.Dir(dest), 0o755)
-	_ = os.WriteFile(dest, b, 0o644)
-	return dest
+	return ""
 }
 
-func (st *splashState) layout(cx, cy int) (plain, ultra, launch, cancel win.RECT) {
-	// Bottom panel area for controls (logo fills whole window behind)
-	panelTop := cy - 170
-	plain = win.RECT{Left: 40, Top: int32(panelTop), Right: 260, Bottom: int32(panelTop + 36)}
-	ultra = win.RECT{Left: 280, Top: int32(panelTop), Right: int32(cx - 40), Bottom: int32(panelTop + 36)}
-	launch = win.RECT{Left: 40, Top: int32(panelTop + 56), Right: int32(cx/2 - 12), Bottom: int32(panelTop + 104)}
-	cancel = win.RECT{Left: int32(cx/2 + 12), Top: int32(panelTop + 56), Right: int32(cx - 40), Bottom: int32(panelTop + 104)}
+// layoutRegions returns non-overlapping bands.
+// logoDest = aspect-fit rect for the full emblem in the upper area.
+func (st *splashState) layoutRegions(cx, cy int) (logoDest, title, plain, ultra, launch, cancel, footer win.RECT) {
+	pad := 28
+	gap := 14
+
+	// Reserve bottom controls: title(~28) + radios(40) + gap + buttons(48) + gap + footer(24) + pads
+	controlsH := 28 + gap + 40 + gap + 48 + gap + 22 + pad
+	logoAreaH := cy - controlsH - pad
+	if logoAreaH < 180 {
+		logoAreaH = 180
+	}
+
+	// Aspect-fit (contain) the full logo into [pad, pad, cx-pad, pad+logoAreaH]
+	areaW := cx - 2*pad
+	areaH := logoAreaH
+	dstW, dstH := areaW, areaH
+	if st.bgW > 0 && st.bgH > 0 {
+		srcAspect := float64(st.bgW) / float64(st.bgH)
+		areaAspect := float64(areaW) / float64(areaH)
+		if srcAspect > areaAspect {
+			dstW = areaW
+			dstH = int(float64(areaW) / srcAspect)
+		} else {
+			dstH = areaH
+			dstW = int(float64(areaH) * srcAspect)
+		}
+	}
+	logoLeft := (cx - dstW) / 2
+	logoTop := pad + (areaH-dstH)/2
+	logoDest = win.RECT{
+		Left: int32(logoLeft), Top: int32(logoTop),
+		Right: int32(logoLeft + dstW), Bottom: int32(logoTop + dstH),
+	}
+
+	y := pad + logoAreaH + 4
+	title = win.RECT{Left: int32(pad), Top: int32(y), Right: int32(cx - pad), Bottom: int32(y + 28)}
+	y += 28 + gap
+
+	mid := cx / 2
+	plain = win.RECT{Left: int32(pad), Top: int32(y), Right: int32(mid - 8), Bottom: int32(y + 40)}
+	ultra = win.RECT{Left: int32(mid + 8), Top: int32(y), Right: int32(cx - pad), Bottom: int32(y + 40)}
+	y += 40 + gap
+
+	launch = win.RECT{Left: int32(pad), Top: int32(y), Right: int32(mid - 8), Bottom: int32(y + 48)}
+	cancel = win.RECT{Left: int32(mid + 8), Top: int32(y), Right: int32(cx - pad), Bottom: int32(y + 48)}
+	y += 48 + gap
+
+	footer = win.RECT{Left: int32(pad), Top: int32(y), Right: int32(cx - pad), Bottom: int32(cy - 8)}
 	return
 }
 
 func (st *splashState) hitTest(x, y int) int {
 	rc, _ := st.wnd.Hwnd().GetClientRect()
-	plain, ultra, launch, cancel := st.layout(int(rc.Right), int(rc.Bottom))
+	_, _, plain, ultra, launch, cancel, _ := st.layoutRegions(int(rc.Right), int(rc.Bottom))
 	pt := win.POINT{X: int32(x), Y: int32(y)}
 	if ptIn(pt, plain) {
 		return 1
@@ -227,14 +270,25 @@ func (st *splashState) paintSplash() {
 	rc, _ := hwnd.GetClientRect()
 	cx, cy := int(rc.Right), int(rc.Bottom)
 
-	// 1) Logo background — cover/stretch (room for future face overlay after this)
+	// Solid navy plate (no banding from stretched empty margins)
+	navy, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: colorNavy})
+	if navy != 0 {
+		_ = hdc.FillRect(&rc, navy)
+		_ = navy.DeleteObject()
+	}
+
+	logoDest, title, plain, ultra, launch, cancel, footer := st.layoutRegions(cx, cy)
+
+	// Logo — full emblem, aspect-fit, high-quality stretch into upper band only
 	if st.bgBmp != 0 && st.bgW > 0 && st.bgH > 0 {
-		mem, _ := hdc.CreateCompatibleDC()
-		if mem != 0 {
+		mem, err := hdc.CreateCompatibleDC()
+		if err == nil && mem != 0 {
 			old, _ := mem.SelectObjectBmp(st.bgBmp)
+			_, _ = hdc.SetStretchBltMode(co.STRETCH_HALFTONE)
+			_, _ = hdc.SetBrushOrgEx(win.POINT{X: 0, Y: 0})
 			_ = hdc.StretchBlt(
-				win.POINT{X: 0, Y: 0},
-				win.SIZE{Cx: int32(cx), Cy: int32(cy)},
+				win.POINT{X: logoDest.Left, Y: logoDest.Top},
+				win.SIZE{Cx: logoDest.Right - logoDest.Left, Cy: logoDest.Bottom - logoDest.Top},
 				mem,
 				win.POINT{X: 0, Y: 0},
 				win.SIZE{Cx: int32(st.bgW), Cy: int32(st.bgH)},
@@ -243,46 +297,31 @@ func (st *splashState) paintSplash() {
 			_, _ = mem.SelectObjectBmp(old)
 			_ = mem.DeleteDC()
 		}
-	} else {
-		brush, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: win.RGB(0x05, 0x0a, 0x15)})
-		if brush != 0 {
-			_ = hdc.FillRect(&rc, brush)
-			_ = brush.DeleteObject()
-		}
 	}
 
-	// Soft dark scrim over lower third so green controls stay readable on logo
-	scrimTop := cy - 190
-	scrimBrush, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: colorDarkPanel})
-	if scrimBrush != 0 {
-		scrim := win.RECT{Left: 0, Top: int32(scrimTop), Right: int32(cx), Bottom: int32(cy)}
-		_ = hdc.FillRect(&scrim, scrimBrush)
-		_ = scrimBrush.DeleteObject()
-	}
+	// Future: paintFaceOverlay(hdc, cx, cy) between logo and controls
 
 	_, _ = hdc.SetBkMode(co.BKMODE_TRANSPARENT)
 	_, _ = hdc.SetTextColor(colorGreen)
 	if st.fontTitle != 0 {
 		_, _ = hdc.SelectObjectFont(st.fontTitle)
 	}
-	_ = hdc.TextOut(40, scrimTop+12, "OMNI-CODE  ·  choose layout")
+	_ = hdc.TextOut(int(title.Left), int(title.Top)+4, "OMNI-CODE  ·  choose layout")
+
 	if st.fontBody != 0 {
 		_, _ = hdc.SelectObjectFont(st.fontBody)
 	}
-
-	plain, ultra, launch, cancel := st.layout(cx, cy)
 	st.paintChoice(hdc, plain, "OMNI-CODE (Plain)", !st.modeUltra, st.hover == 1)
 	st.paintChoice(hdc, ultra, "OMNI-CODE Ultra", st.modeUltra, st.hover == 2)
 	st.paintButton(hdc, launch, "Launch", st.hover == 3)
 	st.paintButton(hdc, cancel, "Exit", st.hover == 4)
 
 	_, _ = hdc.SetTextColor(colorGreenDim)
-	_ = hdc.TextOut(40, cy-28, "v"+version+"  ·  "+st.install)
-	// Future: paintFaceOverlay(hdc, cx, cy) — face animation with effects
+	_ = hdc.TextOut(int(footer.Left), int(footer.Top), "v"+version+"  ·  "+st.install)
 }
 
 func (st *splashState) paintChoice(hdc win.HDC, r win.RECT, label string, selected, hover bool) {
-	bg := colorDarkPanel
+	bg := colorPanel
 	if hover || selected {
 		bg = win.RGB(0x0a, 0x22, 0x18)
 	}
@@ -304,10 +343,9 @@ func (st *splashState) paintChoice(hdc win.HDC, r win.RECT, label string, select
 		_ = pen.DeleteObject()
 	}
 
-	// radio dot — always dark fill, green ring, green core when selected (no white)
 	cx := int(r.Left) + 18
 	cy := int(r.Top+r.Bottom) / 2
-	darkDot, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: colorDarkPanel})
+	darkDot, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: colorPanel})
 	ringPen, _ := win.CreatePen(co.PS_SOLID, 2, colorGreen)
 	oldB, _ := hdc.SelectObjectBrush(darkDot)
 	oldP, _ := hdc.SelectObjectPen(ringPen)
@@ -330,18 +368,19 @@ func (st *splashState) paintChoice(hdc win.HDC, r win.RECT, label string, select
 	if ringPen != 0 {
 		_ = ringPen.DeleteObject()
 	}
+
 	_, _ = hdc.SetTextColor(colorGreen)
 	_, _ = hdc.SetBkMode(co.BKMODE_TRANSPARENT)
-	_ = hdc.TextOut(int(r.Left)+36, int(r.Top)+8, label)
+	_ = hdc.TextOut(int(r.Left)+36, int(r.Top)+11, label)
 }
 
 func (st *splashState) paintButton(hdc win.HDC, r win.RECT, label string, hover bool) {
-	bg := win.RGB(0x08, 0x18, 0x12)
+	bg := colorBtnFill
 	if hover {
-		bg = win.RGB(0x0c, 0x2a, 0x1c)
+		bg = colorBtnHover
 	}
 	brush, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: bg})
-	pen, _ := win.CreatePen(co.PS_SOLID, 2, colorBtnBorder)
+	pen, _ := win.CreatePen(co.PS_SOLID, 2, colorGreen)
 	oldB, _ := hdc.SelectObjectBrush(brush)
 	oldP, _ := hdc.SelectObjectPen(pen)
 	_ = hdc.RoundRect(r, win.SIZE{Cx: 10, Cy: 10})
@@ -355,9 +394,8 @@ func (st *splashState) paintButton(hdc win.HDC, r win.RECT, label string, hover 
 	}
 	_, _ = hdc.SetTextColor(colorGreen)
 	_, _ = hdc.SetBkMode(co.BKMODE_TRANSPARENT)
-	// rough center
 	tx := int(r.Left) + int(r.Right-r.Left)/2 - len(label)*4
-	ty := int(r.Top) + 14
+	ty := int(r.Top) + 15
 	_ = hdc.TextOut(tx, ty, label)
 }
 
