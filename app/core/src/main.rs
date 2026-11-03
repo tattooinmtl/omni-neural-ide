@@ -7,6 +7,7 @@ mod pool;
 mod activity;
 mod update;
 mod mcp;
+mod agent_run;
 mod delegate;
 mod harness;
 mod state;
@@ -198,6 +199,8 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/fs/copy", post(fsapi::copy_path))
         .route("/api/term/exec", post(fsapi::term_exec))
         .route("/api/chat", post(ai::chat))
+        .route("/api/agent/stop", post(agent_run::stop_run))
+        .route("/api/agent/status", get(agent_run::run_status))
         .route("/api/omni/chat", post(ai::omni_chat))
         .route("/api/omni/volunteer", post(ai::omni_volunteer))
         .route("/api/embed", post(ai::embed))

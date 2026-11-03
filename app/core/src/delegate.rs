@@ -1,4 +1,4 @@
-use crate::ai::{call_minimax_opts, Msg};
+use crate::ai::Msg;
 use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, Json};
 use regex::Regex;
@@ -46,7 +46,24 @@ Prefer a single self-contained HTML file when asked for HTML-only. Be concise ou
     let from = body.from.unwrap_or_else(|| "Omni".into());
     let user = format!("From {from}: {task}");
     let msgs = vec![Msg { role: "user".into(), content: user.clone() }];
-    let coding_reply = call_minimax_opts(&key, system, &msgs, 2048, 0.4).await?;
+    let caps = crate::agent_run::Caps::coding();
+    let run = st.runs.start("delegate-coding");
+    let run_id = run.id.clone();
+    let coding_reply = match crate::agent_run::with_caps_cancel(&run, caps, &st.data_dir, || {
+        let key = key.clone();
+        let system = system.to_string();
+        let msgs = msgs.clone();
+        let run = run.clone();
+        let mt = caps.max_output_tokens.min(2048);
+        async move { crate::ai::call_minimax_opts_cancel(&key, &system, &msgs, mt, 0.4, &run).await }
+    }).await {
+        Ok(c) => c,
+        Err((code, msg)) => {
+            st.runs.finish(&run_id);
+            return Err((code, msg));
+        }
+    };
+    st.runs.finish(&run_id);
 
     let files = extract_and_write_files(&st, &coding_reply)?;
     {
@@ -77,6 +94,10 @@ Prefer a single self-contained HTML file when asked for HTML-only. Be concise ou
     }))
 }
 
+pub fn extract_and_write_files_pub(st: &AppState, reply: &str) -> Result<Vec<String>, (StatusCode, String)> {
+    extract_and_write_files(st, reply)
+}
+
 fn extract_and_write_files(st: &AppState, reply: &str) -> Result<Vec<String>, (StatusCode, String)> {
     let root = st.project_root.read().clone();
     let Some(root) = root else {
@@ -102,7 +123,7 @@ fn write_fences(root: &std::path::Path, reply: &str) -> Result<Vec<String>, (Sta
             std::fs::create_dir_all(parent).ok();
         }
         std::fs::write(&path, content).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        written.push(fname.to_string());
+        written.push(path.to_string_lossy().to_string());
     }
     if !matched {
         // Fallback: single html/js fence → towerdefense.html if content looks like HTML game
@@ -113,7 +134,7 @@ fn write_fences(root: &std::path::Path, reply: &str) -> Result<Vec<String>, (Sta
                 let fname = "towerdefense.html";
                 let path = root.join(fname);
                 std::fs::write(&path, content).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                written.push(fname.into());
+                written.push(path.to_string_lossy().to_string());
             }
         }
     }

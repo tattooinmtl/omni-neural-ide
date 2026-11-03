@@ -170,9 +170,9 @@ function shell() {
       <span class="item plain-only">3.11.4 64-bit</span>
     </div>
     <div class="right">
-      <span class="item plain-only">OMNI-CODE 1.3.2</span>
+      <span class="item plain-only">OMNI-CODE 1.3.3</span>
       <span class="badge plain-only">Insiders</span>
-      <span class="item ultra-only">OMNI 1.3.2</span>
+      <span class="item ultra-only">OMNI 1.3.3</span>
       <span class="item ultra-only">🔔</span>
       <span class="item ultra-only">↻</span>
       <span class="item ultra-only">▶</span>
@@ -709,7 +709,7 @@ async function handleMenu(id: string) {
     case 'term.clear': terminal?.clear(); break;
     case 'app.resetLayout': layoutState = resetLayout(mode); applyLayout(); break;
     case 'app.settings': SettingsView.open(document.body); break;
-    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.2`); break;
+    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.3`); break;
     case 'help.docs': window.open('https://github.com/tattooinmtl/omni-neural-ide', '_blank'); break;
     default:
       if (id.startsWith('panel.')) {
@@ -909,6 +909,24 @@ async function boot() {
     onCursor: (line, col) => { cursor = { line, col }; paintStatus(); },
   });
   chat = new ChatPanel(document.getElementById('chat')!, mode);
+  (window as any).__codingChat = chat;
+  const openGeneratedFiles = async (files: string[]) => {
+    let root = '';
+    try { const cfg = await api.config(); root = (cfg as any).projectRoot || ''; } catch {}
+    for (const f of files) {
+      const abs = f.startsWith('/') || /^[A-Za-z]:[\\/]/.test(f) ? f : (root ? `${root.replace(/[\\/]$/, '')}/${f}` : f);
+      try {
+        const r = await api.readFile(abs);
+        openTab(r.path || abs, r.content || '');
+      } catch (e) {
+        console.warn('open generated failed', abs, e);
+        try { openTab(abs, '// could not load file'); } catch {}
+      }
+    }
+    try { await refreshTree(); } catch {}
+  };
+  chat.setOnFilesWritten(openGeneratedFiles);
+  (window as any).__omniOpenFiles = openGeneratedFiles;
   assistant = FloatingAssistant.create(document.getElementById('assistant-root')!);
   (window as any).__omniReloadConfig = () => assistant.reloadConfig();
   (window as any).__codingChat = chat;

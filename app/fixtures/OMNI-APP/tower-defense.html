@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Tower Defense</title>
+<style>
+body{margin:0;background:#0b1220;color:#e8f0ff;font-family:system-ui}
+canvas{display:block;margin:12px auto;background:#132033;border:1px solid #2a4a6a}
+#hud{text-align:center;padding:8px}
+</style></head><body>
+<div id="hud"><b>OMNI Tower Defense</b> · gold <span id="g">100</span> · lives <span id="l">20</span> · wave <span id="w">1</span>
+ · click map to place towers ($40)</div>
+<canvas id="c" width="720" height="480"></canvas>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+let gold=100,lives=20,wave=1;
+const path=[{x:0,y:240},{x:180,y:240},{x:180,y:120},{x:420,y:120},{x:420,y:360},{x:720,y:360}];
+const towers=[],enemies=[];
+function spawn(){for(let i=0;i<4+wave;i++)enemies.push({d:-i*28,hp:30+wave*8,spd:0.7+wave*0.05});}
+function pos(d){let left=d;for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];const len=Math.hypot(b.x-a.x,b.y-a.y);if(left<=len){const k=left/len;return{x:a.x+(b.x-a.x)*k,y:a.y+(b.y-a.y)*k};}left-=len;}return Object.assign({},path[path.length-1]);}
+cv.onclick=e=>{const r=cv.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(gold>=40){gold-=40;towers.push({x,y,cd:0});}};
+spawn();
+function frame(){
+  ctx.clearRect(0,0,720,480);
+  ctx.strokeStyle='#3d6d9e';ctx.lineWidth=34;ctx.beginPath();
+  path.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  for(const tw of towers){
+    ctx.fillStyle='#5ee2a0';ctx.beginPath();ctx.arc(tw.x,tw.y,14,0,6.28);ctx.fill();
+    tw.cd--;
+    if(tw.cd<=0){let best=null,bd=90;for(const en of enemies){const p=pos(en.d);const d=Math.hypot(p.x-tw.x,p.y-tw.y);if(d<bd){bd=d;best=en;}}if(best){best.hp-=18;tw.cd=28;}}
+  }
+  for(let i=enemies.length-1;i>=0;i--){
+    const en=enemies[i];en.d+=en.spd;const p=pos(en.d);
+    ctx.fillStyle=en.hp>0?'#ff6b6b':'#888';ctx.fillRect(p.x-8,p.y-8,16,16);
+    if(en.hp<=0){enemies.splice(i,1);gold+=8;}else if(en.d>1200){enemies.splice(i,1);lives--;}
+  }
+  if(!enemies.length){wave++;spawn();}
+  document.getElementById('g').textContent=gold;
+  document.getElementById('l').textContent=lives;
+  document.getElementById('w').textContent=wave;
+  requestAnimationFrame(frame);
+}
+frame();
+</script></body></html>
+

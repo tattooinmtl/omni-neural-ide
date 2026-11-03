@@ -65,6 +65,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     r = await fetch(`${BASE}${path}`, {
       ...init,
       headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      signal: init?.signal,
     });
   } catch (e: any) {
     const err = new ApiError('offline', "Can't reach my brain right now.", 0, String(e?.message || e));
@@ -102,11 +103,19 @@ export const api = {
   openFolder: (path: string) =>
     req<{ root: string; tree: TreeNode }>('/api/fs/open', { method: 'POST', body: JSON.stringify({ path }) }),
   tree: () => req<{ root: string | null; tree: TreeNode | null }>('/api/fs/tree'),
-  chat: (messages: ChatMessage[], model: string) =>
-    req<{ content: string; model: string }>('/api/chat', {
+  chat: (messages: ChatMessage[], model: string, init?: { signal?: AbortSignal }) =>
+    req<{ content: string; model: string; files_written?: string[]; run_id?: string; usage?: { tokens_out: number; elapsed_ms: number; cost_usd: number }; stopped?: boolean; capped?: string }>('/api/chat', {
       method: 'POST',
       body: JSON.stringify({ messages, model }),
+      signal: init?.signal,
     }),
+  agentStop: (run_id?: string) =>
+    req<{ ok: boolean; run_id?: string; detail?: string }>('/api/agent/stop', {
+      method: 'POST',
+      body: JSON.stringify({ run_id: run_id || null }),
+    }),
+  agentStatus: () =>
+    req<{ active: boolean; run_id?: string; label?: string; elapsed_ms: number; tokens_out: number; idle_ms: number; cost_usd: number; cancelled: boolean }>('/api/agent/status'),
   slash: (cmd: string, args: string) =>
     req<{ ok: boolean; message: string; data?: unknown }>('/api/slash', {
       method: 'POST',
@@ -116,8 +125,8 @@ export const api = {
   getKeys: () => req<any>('/api/keys'),
   setKeys: (body: Record<string, unknown>) =>
     req<{ ok: boolean }>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
-  omniChat: (message: string, opts?: { system?: string; max_tokens?: number; temperature?: number; timeout_ms?: number }) =>
-    req<{ content: string; model: string; tools_used?: string[]; delegate?: any; update?: any }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message, ...opts }) }),
+  omniChat: (message: string, opts?: { system?: string; max_tokens?: number; temperature?: number; timeout_ms?: number; signal?: AbortSignal }) =>
+    req<{ content: string; model: string; tools_used?: string[]; delegate?: any; update?: any; run_id?: string; usage?: { tokens_out: number; elapsed_ms: number; cost_usd: number }; stopped?: boolean; capped?: string }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message, ...opts }), signal: opts?.signal }),
   delegateToCodingAgent: (task: string) =>
     req<{ task_id: string; status: string; message: string; coding_reply: string; files_written: string[] }>('/api/omni/delegate', { method: 'POST', body: JSON.stringify({ task, from: 'Omni' }) }),
   updateCheck: () => req<{ current: string; latest?: string; available: boolean; asset?: string; notes?: string }>('/api/update/check'),

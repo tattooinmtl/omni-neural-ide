@@ -56,6 +56,8 @@ export class FloatingAssistant {
           <button type="button" class="asst-send" id="omni-send" title="Send" aria-label="Send">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 16V8M8 12l4-4 4 4"/></svg>
           </button>
+          <button type="button" class="asst-stop hidden" id="omni-stop" title="Stop (Esc)">Stop</button>
+          <span class="asst-meter hidden" id="omni-meter"></span>
         </div>
       </div>
     `;
@@ -203,6 +205,12 @@ export class FloatingAssistant {
   }
 
   thinkingTimer = 0;
+  abortCtrl: AbortController | null = null;
+  statusTimer = 0;
+  liveTokens = 0;
+  liveCost = 0;
+  liveElapsed = 0;
+  omniBusy = false;
   ummIndex = 0;
   lipRaf = 0;
   analyser: AnalyserNode | null = null;
@@ -239,16 +247,34 @@ export class FloatingAssistant {
       return;
     }
     this.beginThinking();
+    this.omniBusy = true;
+    this.abortCtrl = new AbortController();
+    this.root.querySelector('#omni-stop')?.classList.remove('hidden');
+    this.root.querySelector('#omni-meter')?.classList.remove('hidden');
+    this.startOmniMeter();
     try {
       const r = await api.omniChat(text, {
         system: personalitySystemPrompt(this.cfg),
         max_tokens: this.cfg.maxTokens,
         temperature: this.cfg.temperature,
         timeout_ms: this.cfg.timeoutMs,
+        signal: this.abortCtrl.signal,
       });
       this.endThinking();
       if (r.delegate) {
         (window as any).__codingChat?.injectFromOmni?.(r.delegate);
+        const files = r.delegate.files_written || [];
+        if (files.length) (window as any).__omniOpenFiles?.(files);
+      }
+      if (r.stopped) {
+        this.appendLog('omni', r.content || 'Stopped — generation cancelled.');
+        this.setMood('neutral');
+        return;
+      }
+      if (r.capped) {
+        this.appendLog('omni', r.capped);
+        this.setMood('worried');
+        return;
       }
       if (r.update?.ok) {
         // updater helper relaunches — exit cleanly soon
@@ -291,6 +317,39 @@ export class FloatingAssistant {
   endThinking() {
     if (this.thinkingTimer) { window.clearInterval(this.thinkingTimer); this.thinkingTimer = 0; }
     this.digitalFace?.setState(this.talking ? 'talking' : 'idle');
+    this.omniBusy = false;
+    this.abortCtrl = null;
+    this.stopOmniMeter();
+    this.root.querySelector('#omni-stop')?.classList.add('hidden');
+    this.root.querySelector('#omni-meter')?.classList.add('hidden');
+  }
+
+  async stopOmni() {
+    try { this.abortCtrl?.abort(); } catch {}
+    try { await api.agentStop(); } catch {}
+    this.endThinking();
+    this.appendLog('omni', 'Stopped — generation cancelled.');
+    this.setMood('neutral');
+    this.setStatus('Stopped');
+  }
+
+  startOmniMeter() {
+    this.stopOmniMeter();
+    this.statusTimer = window.setInterval(async () => {
+      try {
+        const s = await api.agentStatus();
+        this.liveTokens = s.tokens_out || 0;
+        this.liveCost = s.cost_usd || 0;
+        this.liveElapsed = s.elapsed_ms || 0;
+        const el = this.root.querySelector('#omni-meter');
+        if (el) el.textContent = `${this.liveTokens} tok · $${this.liveCost.toFixed(5)} · ${(this.liveElapsed/1000).toFixed(1)}s`;
+        if (s.active && s.idle_ms > 60000) void this.stopOmni();
+      } catch {}
+    }, 400);
+  }
+
+  stopOmniMeter() {
+    if (this.statusTimer) { window.clearInterval(this.statusTimer); this.statusTimer = 0; }
   }
 
   appendLog(who: 'you' | 'omni', text: string) {

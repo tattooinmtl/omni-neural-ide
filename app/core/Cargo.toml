@@ -1,6 +1,6 @@
 [package]
 name = "omni-core"
-version = "1.3.2"
+version = "1.3.3"
 edition = "2021"
 description = "OMNI-CODE / Ultra Rust core — harness, guardrails, API, native window"
 

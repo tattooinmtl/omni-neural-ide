@@ -24,6 +24,7 @@ pub struct AppState {
     /// Separate Omni the Presence chat history
     pub delegate_log: RwLock<Vec<crate::delegate::DelegateOut>>,
     pub omni_history: RwLock<Vec<(String,String)>>,
+    pub runs: crate::agent_run::RunRegistry,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -79,6 +80,7 @@ impl AppState {
             pool: AgentPool::new(max_agents),
             delegate_log: RwLock::new(Vec::new()),
             omni_history: RwLock::new(Vec::new()),
+            runs: crate::agent_run::RunRegistry::default(),
         };
         if let Some(p) = project {
             state.open_project(&p)?;

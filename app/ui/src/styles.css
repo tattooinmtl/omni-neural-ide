@@ -463,3 +463,10 @@ body.mode-ultra .side-dock-tabs button.active{color:var(--accent)}
 .menu-item .mi-ico svg{width:14px;height:14px}
 body.mode-plain .menu-item .mi-ico{display:none}
 .menu-dropdown,.ctx-menu{min-width:260px;max-width:360px}
+
+/* v1.3.3 stop + live token meter */
+.stop-btn,.asst-stop{margin-left:8px;padding:2px 10px;border-radius:6px;border:1px solid #c44;background:#3a1515;color:#ffb4b4;font-size:11px;cursor:pointer}
+.stop-btn:hover,.asst-stop:hover{background:#5a1d1d}
+.token-meter,.asst-meter{margin-left:8px;font-size:11px;color:var(--muted,#8aa;);opacity:.9;font-variant-numeric:tabular-nums}
+.thinking{flex-wrap:wrap}
+.asst-stop.hidden,.asst-meter.hidden{display:none!important}

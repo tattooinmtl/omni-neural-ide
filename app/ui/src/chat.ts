@@ -11,6 +11,13 @@ export class ChatPanel {
   private thinking = false;
   private mode: 'plain' | 'ultra';
   private showThinking = false;
+  private abortCtrl: AbortController | null = null;
+  private runId: string | null = null;
+  private statusTimer = 0;
+  private liveTokens = 0;
+  private liveCost = 0;
+  private liveElapsed = 0;
+  private onFilesWritten: ((files: string[]) => void) | null = null;
 
   constructor(el: HTMLElement, mode: 'plain' | 'ultra') {
     this.el = el;
@@ -21,6 +28,14 @@ export class ChatPanel {
   setMode(mode: 'plain' | 'ultra') {
     this.mode = mode;
     this.render();
+  }
+
+  setOnFilesWritten(cb: (files: string[]) => void) {
+    this.onFilesWritten = cb;
+  }
+
+  stop() {
+    void this.stopGeneration();
   }
 
   clear() {
@@ -74,9 +89,11 @@ export class ChatPanel {
         </div>
         <div class="chat-disclaimer">OMNI-CODE can make mistakes. Verify important information.</div>
       </div>
-      <div class="thinking ${this.thinking && this.mode==='ultra' ? '' : 'hidden'}" id="thinking">
+      <div class="thinking ${this.thinking ? '' : 'hidden'}" id="thinking">
         <span class="dots"><span></span><span></span><span></span></span>
-        Coding Agent is thinking
+        <span id="thinking-label">Coding Agent is thinking</span>
+        <span class="token-meter" id="token-meter">${this.thinking ? `· ${this.liveTokens} tok · $${this.liveCost.toFixed(5)} · ${(this.liveElapsed/1000).toFixed(1)}s` : ''}</span>
+        <button type="button" class="stop-btn" id="chat-stop" title="Stop (Esc)">Stop</button>
       </div>
     `;
     this.paintMessages();
@@ -150,6 +167,52 @@ export class ChatPanel {
       this.model = opts[(i + 1) % opts.length];
       this.render();
     });
+    this.el.querySelector('#chat-stop')?.addEventListener('click', () => void this.stopGeneration());
+  }
+
+  private escHandler = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this.thinking) {
+      e.preventDefault();
+      void this.stopGeneration();
+    }
+  };
+
+  private async stopGeneration() {
+    try { this.abortCtrl?.abort(); } catch {}
+    try { await api.agentStop(this.runId || undefined); } catch {}
+    this.thinking = false;
+    this.stopStatusPoll();
+    this.messages.push({ role: 'assistant', content: 'Stopped — generation cancelled.' });
+    this.times.push('');
+    this.render();
+  }
+
+  private startStatusPoll() {
+    this.stopStatusPoll();
+    this.statusTimer = window.setInterval(async () => {
+      try {
+        const s = await api.agentStatus();
+        if (!s.active && !this.thinking) return;
+        this.liveTokens = s.tokens_out || 0;
+        this.liveCost = s.cost_usd || 0;
+        this.liveElapsed = s.elapsed_ms || 0;
+        if (s.run_id) this.runId = s.run_id;
+        const meter = this.el.querySelector('#token-meter');
+        if (meter) meter.textContent = `· ${this.liveTokens} tok · $${this.liveCost.toFixed(5)} · ${(this.liveElapsed/1000).toFixed(1)}s`;
+        // Client watchdog: idle > 60s with active thinking
+        if (s.active && s.idle_ms > 60000) {
+          console.warn('client watchdog: idle', s.idle_ms);
+          void this.stopGeneration();
+          this.messages.push({ role: 'assistant', content: 'Hit idle watchdog (no tokens) cap — stopped to protect the UI and your token budget.' });
+          this.times.push('');
+          this.render();
+        }
+      } catch { /* ignore */ }
+    }, 400);
+  }
+
+  private stopStatusPoll() {
+    if (this.statusTimer) { window.clearInterval(this.statusTimer); this.statusTimer = 0; }
   }
 
   /** Omni handoff: visible message + start Coding Agent run. */
@@ -206,19 +269,41 @@ export class ChatPanel {
     this.messages.push({ role: 'user', content: trimmed });
     this.times.push('');
     this.thinking = true;
+    this.liveTokens = 0; this.liveCost = 0; this.liveElapsed = 0;
+    this.abortCtrl = new AbortController();
+    window.addEventListener('keydown', this.escHandler);
     this.render();
+    this.startStatusPoll();
     try {
-      const r = await api.chat(this.messages, this.model);
-      this.messages.push({ role: 'assistant', content: r.content });
+      const r = await api.chat(this.messages, this.model, { signal: this.abortCtrl.signal });
+      if (r.run_id) this.runId = r.run_id;
+      if (r.usage) {
+        this.liveTokens = r.usage.tokens_out;
+        this.liveCost = r.usage.cost_usd;
+        this.liveElapsed = r.usage.elapsed_ms;
+      }
+      const files = r.files_written || [];
+      if (files.length) this.onFilesWritten?.(files);
+      let content = r.content || '';
+      if (r.stopped) content = content || 'Stopped — generation cancelled.';
+      if (r.capped) content = r.capped;
+      this.messages.push({ role: 'assistant', content });
       this.times.push('');
     } catch (e: any) {
-      let msg = "Can't reach my brain right now.";
-      if (e instanceof ApiError) msg = e.message;
-      else if (e?.message && !/<!DOCTYPE|<html/i.test(String(e.message))) msg = String(e.message).slice(0, 200);
-      this.messages.push({ role: 'assistant', content: msg });
+      if (e?.name === 'AbortError') {
+        this.messages.push({ role: 'assistant', content: 'Stopped — generation cancelled.' });
+      } else {
+        let msg = "Can't reach my brain right now.";
+        if (e instanceof ApiError) msg = e.message;
+        else if (e?.message && !/<!DOCTYPE|<html/i.test(String(e.message))) msg = String(e.message).slice(0, 200);
+        this.messages.push({ role: 'assistant', content: msg });
+      }
       this.times.push('');
     } finally {
       this.thinking = false;
+      this.abortCtrl = null;
+      this.stopStatusPoll();
+      window.removeEventListener('keydown', this.escHandler);
       this.render();
     }
   }
@@ -251,7 +336,8 @@ function copyIcon() {
 }
 
 function highlightCode(src: string): string {
-  const keys = /\b(from|import|def|class|return|if|else|elif|None|True|False|async|await|const|let|var|export|function|new|try|catch|finally|with|as|in|is|not|and|or)\b/g;
+  // Never freeze the UI on giant blobs (tower-defense HTML etc.)
+  if (src.length > 4000) return esc(src.slice(0, 4000)) + '\n/* … truncated in chat — open the file tab */';
   const lines = src.split('\n').map(line => {
     // crude: strings first
     let out = '';
