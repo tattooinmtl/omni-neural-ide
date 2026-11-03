@@ -8,7 +8,7 @@ Names tried and rejected: NeuroIDE. Early name: omni.Neural.IDE. Locked names:
 - **OMNI-CODE** — the plain version.
 - Version text sits in the **top title**, on Plain, on Ultra, and on the Go launcher.
 
-Install root, locked: `C:\Users\ThePa\.omni-neural-ide`
+Install root, locked: `%USERPROFILE%\.omni-neural-ide`
 
 ---
 
@@ -324,7 +324,7 @@ A team, not one hidden agent.
 
 ## 12. Install
 
-- `install.ps1` from the git repo, into `C:\Users\ThePa\.omni-neural-ide`.
+- `install.ps1` from the git repo, into `%USERPROFILE%\.omni-neural-ide`.
 - If the folder exists but is not a git repo, the installer must not pretend it updated. That failure already happened (`fatal: not a git repository`).
 - A real Windows installer comes after the script works.
 - Build outputs that were confused with "the app": `core/target/debug/omni-core.exe` is the debug Rust binary; release is `core/target/release/omni-core.exe`. The launcher is built from the `launcher` module (`go build -o launcher.exe` inside that module). The thing the user double-clicks is the launcher, and it must refuse to start a missing or stale core.

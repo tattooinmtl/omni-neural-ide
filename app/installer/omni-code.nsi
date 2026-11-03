@@ -1,12 +1,14 @@
-; OMNI-CODE v1.0 per-user Windows installer (no admin required)
+; OMNI-CODE v1.0.1 per-user Windows installer (no admin)
+; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.0.0"
+!define PRODUCT_VERSION "1.0.1"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
+!define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.0.0.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.0.1.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user
@@ -46,7 +48,7 @@ Var StartMenuFolder
 Function .onInit
   SetShellVarContext current
   ${If} $InstDir == ""
-    StrCpy $InstDir "$LOCALAPPDATA\Programs\OMNI-CODE"
+    StrCpy $InstDir "$PROFILE\.omni-neural-ide"
   ${EndIf}
 FunctionEnd
 
@@ -54,9 +56,34 @@ Function un.onInit
   SetShellVarContext current
 FunctionEnd
 
-; Detect WebView2 Evergreen Runtime via registry
+; Remove leftover v1.0 install under %LOCALAPPDATA%\Programs\OMNI-CODE
+Function RemoveLegacyInstall
+  StrCpy $0 "${OLD_INSTALL_DIR}"
+  IfFileExists "$0\Uninstall.exe" 0 legacy_files
+    DetailPrint "Removing previous v1.0 install at $0 ..."
+    nsExec::ExecToLog '"$0\Uninstall.exe" /S'
+    Pop $1
+  legacy_files:
+  IfFileExists "$0\*.*" 0 legacy_shortcuts
+    RMDir /r "$0"
+  legacy_shortcuts:
+  ; Old Start Menu / Desktop shortcuts that pointed at Programs\OMNI-CODE
+  Delete "$SMPROGRAMS\OMNI-CODE\OMNI-CODE.lnk"
+  Delete "$SMPROGRAMS\OMNI-CODE\Uninstall OMNI-CODE.lnk"
+  RMDir "$SMPROGRAMS\OMNI-CODE"
+  Delete "$DESKTOP\OMNI-CODE.lnk"
+  ; If registry still points at the old path, clear it (new install rewrites it)
+  ReadRegStr $1 HKCU "${REGPATH_UNINST}" "InstallLocation"
+  ${If} $1 == "$0"
+    DeleteRegKey HKCU "${REGPATH_UNINST}"
+  ${EndIf}
+  ReadRegStr $1 HKCU "Environment" "OMNI_HOME"
+  ${If} $1 == "$0"
+    DeleteRegValue HKCU "Environment" "OMNI_HOME"
+  ${EndIf}
+FunctionEnd
+
 Function CheckWebView2
-  ; Prefer 64-bit view of registry on 64-bit Windows
   SetRegView 64
   ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
   ${If} $0 == ""
@@ -68,7 +95,6 @@ Function CheckWebView2
   SetRegView lastused
   ${If} $0 == ""
     DetailPrint "WebView2 Runtime not found — launching Evergreen bootstrapper..."
-    ; Silent bootstrapper; may need network. Non-fatal if it fails (user can install later).
     nsExec::ExecToLog '"$INSTDIR\webview2\MicrosoftEdgeWebview2Setup.exe" /silent /install'
     Pop $1
     DetailPrint "WebView2 bootstrapper exit code: $1"
@@ -79,40 +105,38 @@ FunctionEnd
 
 Section "OMNI-CODE (required)" SecMain
   SectionIn RO
-  SetOutPath "$INSTDIR"
 
-  ; Create layout
+  Call RemoveLegacyInstall
+
+  SetOutPath "$INSTDIR"
   CreateDirectory "$INSTDIR\bin"
   CreateDirectory "$INSTDIR\ui\dist"
   CreateDirectory "$INSTDIR\fixtures"
   CreateDirectory "$INSTDIR\keys"
   CreateDirectory "$INSTDIR\sandbox"
   CreateDirectory "$INSTDIR\checkpoints"
+  CreateDirectory "$INSTDIR\logs"
   CreateDirectory "$INSTDIR\webview2"
 
-  ; Binaries
   SetOutPath "$INSTDIR\bin"
   File "/oname=launcher.exe" "..\..\..\omni-installer\payload\bin\launcher.exe"
   File "/oname=omni-core.exe" "..\..\..\omni-installer\payload\bin\omni-core.exe"
+  File "/oname=WebView2Loader.dll" "..\..\..\omni-installer\payload\bin\WebView2Loader.dll"
+  File "/oname=libunwind.dll" "..\..\..\omni-installer\payload\bin\libunwind.dll"
 
-  ; Prebuilt UI (no npm on user machine)
   SetOutPath "$INSTDIR\ui\dist"
   File /r "..\..\..\omni-installer\payload\ui\dist\*.*"
 
-  ; Demo fixtures
   SetOutPath "$INSTDIR\fixtures"
   File /r "..\..\..\omni-installer\payload\fixtures\*.*"
 
-  ; Docs + WebView2 bootstrapper
   SetOutPath "$INSTDIR"
   File "/oname=README.txt" "..\..\..\omni-installer\payload\README.txt"
   SetOutPath "$INSTDIR\webview2"
   File "/oname=MicrosoftEdgeWebview2Setup.exe" "..\..\..\omni-installer\payload\webview2\MicrosoftEdgeWebview2Setup.exe"
 
-  ; Uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  ; Add/Remove Programs (HKCU — per-user)
   WriteRegStr HKCU "${REGPATH_UNINST}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr HKCU "${REGPATH_UNINST}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKCU "${REGPATH_UNINST}" "Publisher" "${PRODUCT_PUBLISHER}"
@@ -127,7 +151,6 @@ Section "OMNI-CODE (required)" SecMain
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKCU "${REGPATH_UNINST}" "EstimatedSize" "$0"
 
-  ; OMNI_HOME default via user env (so launcher finds install even if moved logic changes)
   WriteRegStr HKCU "Environment" "OMNI_HOME" "$INSTDIR"
 
   Call CheckWebView2
@@ -146,26 +169,23 @@ Section "Desktop shortcut" SecDesktop
 SectionEnd
 
 Section "Uninstall"
-  ; Remove shortcuts
   !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
   Delete "$SMPROGRAMS\$StartMenuFolder\OMNI-CODE.lnk"
   Delete "$SMPROGRAMS\$StartMenuFolder\Uninstall OMNI-CODE.lnk"
   RMDir "$SMPROGRAMS\$StartMenuFolder"
   Delete "$DESKTOP\OMNI-CODE.lnk"
 
-  ; Remove files (keep keys/ — user credentials)
   RMDir /r "$INSTDIR\bin"
   RMDir /r "$INSTDIR\ui"
   RMDir /r "$INSTDIR\fixtures"
   RMDir /r "$INSTDIR\webview2"
   RMDir /r "$INSTDIR\sandbox"
   RMDir /r "$INSTDIR\checkpoints"
+  ; keep keys\ and logs\ (user data)
   Delete "$INSTDIR\README.txt"
   Delete "$INSTDIR\Uninstall.exe"
 
-  ; Registry
   DeleteRegKey HKCU "${REGPATH_UNINST}"
-  ; Only clear OMNI_HOME if it still points at this install
   ReadRegStr $0 HKCU "Environment" "OMNI_HOME"
   ${If} $0 == "$INSTDIR"
     DeleteRegValue HKCU "Environment" "OMNI_HOME"
