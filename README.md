@@ -1,18 +1,8 @@
 # omni.Neural.IDE / OMNI-CODE
 
-Harness-first AI coding environment with organic 3D neural visualization.
+This repo holds the design only. There is no app here.
 
-## Structure
-- `launcher/` — Go splash, version check, updater, starts the core
-- `core/` — Rust harness (guardrails, agentic loop, drift detection, tool registry, graph event bus)
-- `ui/` — Three.js neural graph + editor shell (system webview)
-- `docs/` — agents.md, plan.md templates
-- `skills/`, `tools/`, `plugins/` — user-extensible
-
-## Install
-```powershell
-irm https://raw.githubusercontent.com/tattooinmtl/omni-neural-ide/main/install.ps1 | iex
-```
-
-## Status
-Initial skeleton. Design locked in DESIGN.md.
+- [DESIGN.md](DESIGN.md) — the plan from the two-day session
+- [BRAINSTORM.md](BRAINSTORM.md) — same text
+- [docs/plan.md](docs/plan.md) — plan template
+- [docs/agents.md](docs/agents.md) — workflow rules
