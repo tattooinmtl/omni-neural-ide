@@ -10,7 +10,8 @@ function iconFor(node: TreeNode): string {
   }
   const n = node.name.toLowerCase();
   if (n.endsWith('.py')) return svg.py;
-  if (n.endsWith('.tsx') || n.endsWith('.ts')) return svg.ts;
+  if (n.endsWith('.tsx')) return svg.tsx;
+  if (n.endsWith('.ts')) return svg.ts;
   if (n.endsWith('.css')) return svg.css;
   if (n.endsWith('.html')) return svg.html;
   if (n.endsWith('.md')) return svg.md;
@@ -45,6 +46,8 @@ export function renderTree(
       const el = document.createElement('div');
       const matched = [...hi].some(h => h === n.path || h.endsWith('/' + n.name));
       el.className = 'tree-item';
+      el.dataset.path = encodeURIComponent(n.path);
+      el.dataset.kind = n.kind;
       if (n.path === activePath) el.classList.add('active', 'selected');
       else if (matched) el.classList.add('active', 'row-hi');
       el.style.setProperty('--depth', String(depth));

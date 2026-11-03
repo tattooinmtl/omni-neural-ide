@@ -200,6 +200,30 @@ export class FloatingAssistant {
     if (!text) return;
     input.value = '';
     this.appendLog('you', text);
+    if (/^\/update\b/i.test(text)) {
+      this.beginThinking();
+      try {
+        const mode = new URLSearchParams(location.search).get('mode') || 'plain';
+        const chk = await api.updateCheck();
+        this.endThinking();
+        if (!chk.available) {
+          const msg = `Already up to date (${chk.current}).`;
+          this.appendLog('omni', msg);
+          await this.speak(msg);
+          return;
+        }
+        const a = await api.updateApply(mode);
+        this.appendLog('omni', a.message);
+        await this.speak(a.message);
+        window.setTimeout(() => { try { (window as any).__omniQuit?.(); } catch {} }, 800);
+      } catch (e: any) {
+        this.endThinking();
+        const msg = e?.message || 'Update failed';
+        this.appendLog('omni', msg);
+        await this.speak(msg);
+      }
+      return;
+    }
     this.beginThinking();
     try {
       const r = await api.omniChat(text, {

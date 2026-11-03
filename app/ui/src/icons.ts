@@ -24,6 +24,7 @@ export const svg = {
   file: `<svg viewBox="0 0 16 16" fill="none" stroke="#8b949e" stroke-width="1.2"><path d="M5 2.5h4.5L12.5 5.5v8H5z"/><path d="M9.5 2.5V5.5h3"/></svg>`,
   py: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="#3776ab"/><text x="8" y="10.5" text-anchor="middle" font-size="6" fill="#ffd43b" font-family="Segoe UI,sans-serif" font-weight="700">Py</text></svg>`,
   ts: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="#3178c6"/><text x="8" y="10.5" text-anchor="middle" font-size="5.5" fill="#fff" font-family="Segoe UI,sans-serif" font-weight="700">TS</text></svg>`,
+  tsx: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="#61dafb"/><text x="8" y="10.5" text-anchor="middle" font-size="5" fill="#082029" font-family="Segoe UI,sans-serif" font-weight="700">RX</text></svg>`,
   css: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="#264de4"/><text x="8" y="10.5" text-anchor="middle" font-size="5" fill="#fff" font-family="Segoe UI,sans-serif" font-weight="700">CSS</text></svg>`,
   html: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="#e44d26"/><text x="8" y="10.5" text-anchor="middle" font-size="4.5" fill="#fff" font-family="Segoe UI,sans-serif" font-weight="700">HT</text></svg>`,
   md: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="#555"/><text x="8" y="10.5" text-anchor="middle" font-size="5" fill="#ddd" font-family="Segoe UI,sans-serif" font-weight="700">MD</text></svg>`,

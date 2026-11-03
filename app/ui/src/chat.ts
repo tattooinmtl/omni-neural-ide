@@ -174,11 +174,26 @@ export class ChatPanel {
     if (trimmed.startsWith('/')) {
       const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
       try {
-        const r = await api.slash(cmd, rest.join(' '));
         this.messages.push({ role: 'user', content: trimmed });
         this.times.push('');
-        this.messages.push({ role: 'assistant', content: r.message });
-        this.times.push('');
+        if (cmd.toLowerCase() === 'update') {
+          const mode = (new URLSearchParams(location.search).get('mode') || 'plain');
+          const chk = await api.updateCheck();
+          if (!chk.available) {
+            this.messages.push({ role: 'assistant', content: `Already up to date (${chk.current}).` });
+          } else {
+            this.messages.push({ role: 'assistant', content: `Update ${chk.current} → ${chk.latest}. Applying…` });
+            this.render();
+            const a = await api.updateApply(mode);
+            this.messages.push({ role: 'assistant', content: a.message });
+          }
+          this.times.push('');
+          this.times.push('');
+        } else {
+          const r = await api.slash(cmd, rest.join(' '));
+          this.messages.push({ role: 'assistant', content: r.message });
+          this.times.push('');
+        }
       } catch (e: any) {
         this.messages.push({ role: 'user', content: trimmed });
         this.times.push('');

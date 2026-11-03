@@ -124,6 +124,16 @@ export const api = {
   updateApply: (mode?: string, mock_stage?: string) =>
     req<{ ok: boolean; message: string; plan_path?: string }>('/api/update/apply', { method: 'POST', body: JSON.stringify({ mode, mock_stage }) }),
   activity: () => req<{ cpuPct: number; idleSec: number; onBattery: boolean; memPct: number }>('/api/activity'),
+  deletePath: (path: string, confirm = true) =>
+    req<{ ok: boolean }>('/api/fs/delete', { method: 'POST', body: JSON.stringify({ path, confirm }) }),
+  mkdir: (path: string) =>
+    req<{ ok: boolean; path: string }>('/api/fs/mkdir', { method: 'POST', body: JSON.stringify({ path }) }),
+  renamePath: (from: string, to: string) =>
+    req<{ ok: boolean }>('/api/fs/rename', { method: 'POST', body: JSON.stringify({ from, to }) }),
+  copyPath: (from: string, to: string) =>
+    req<{ ok: boolean }>('/api/fs/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
+  termExec: (cmd: string, cwd?: string) =>
+    req<{ ok: boolean; stdout: string; stderr: string; code: number; cwd: string }>('/api/term/exec', { method: 'POST', body: JSON.stringify({ cmd, cwd }) }),
   omniVolunteer: (input: string) =>
     req<{ content: string; model: string }>('/api/omni/volunteer', { method: 'POST', body: JSON.stringify({ task: 'volunteer', input }) }),
   embed: (texts: string[]) =>

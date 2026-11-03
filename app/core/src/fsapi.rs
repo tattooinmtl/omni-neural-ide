@@ -288,3 +288,126 @@ pub async fn client_log(State(st): S, Json(body): Json<ClientLogIn>) -> Json<ser
     tracing::warn!("{line}");
     Json(serde_json::json!({ "ok": true }))
 }
+
+#[derive(Deserialize)]
+pub struct MkdirIn {
+    pub path: String,
+}
+
+pub async fn mkdir(State(st): S, Json(body): Json<MkdirIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let path = PathBuf::from(&body.path);
+    let root = st.project_root.read().clone();
+    guardrails::assert_can_write(&path, root.as_deref(), &st.data_dir)
+        .map_err(|e| (StatusCode::FORBIDDEN, e.0))?;
+    std::fs::create_dir_all(&path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "ok": true, "path": path.display().to_string() })))
+}
+
+#[derive(Deserialize)]
+pub struct RenameIn {
+    pub from: String,
+    pub to: String,
+}
+
+pub async fn rename_path(State(st): S, Json(body): Json<RenameIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let from = PathBuf::from(&body.from);
+    let to = PathBuf::from(&body.to);
+    let root = st.project_root.read().clone();
+    guardrails::assert_can_write(&from, root.as_deref(), &st.data_dir)
+        .map_err(|e| (StatusCode::FORBIDDEN, e.0))?;
+    guardrails::assert_can_write(&to, root.as_deref(), &st.data_dir)
+        .map_err(|e| (StatusCode::FORBIDDEN, e.0))?;
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    std::fs::rename(&from, &to).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "ok": true, "from": body.from, "to": body.to })))
+}
+
+#[derive(Deserialize)]
+pub struct CopyIn {
+    pub from: String,
+    pub to: String,
+}
+
+pub async fn copy_path(State(st): S, Json(body): Json<CopyIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let from = PathBuf::from(&body.from);
+    let to = PathBuf::from(&body.to);
+    let root = st.project_root.read().clone();
+    guardrails::assert_can_write(&to, root.as_deref(), &st.data_dir)
+        .map_err(|e| (StatusCode::FORBIDDEN, e.0))?;
+    if from.is_dir() {
+        return Err((StatusCode::BAD_REQUEST, "directory copy not supported yet — copy files".into()));
+    }
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    std::fs::copy(&from, &to).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+pub struct TermIn {
+    pub cmd: String,
+    pub cwd: Option<String>,
+}
+
+pub async fn term_exec(State(st): S, Json(body): Json<TermIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let cmd = body.cmd.trim();
+    if cmd.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "empty command".into()));
+    }
+    // Block obviously dangerous patterns
+    let lower = cmd.to_lowercase();
+    for bad in ["rm -rf /", "format ", "mkfs", ":(){", "shutdown", "reboot"] {
+        if lower.contains(bad) {
+            return Err((StatusCode::FORBIDDEN, "command blocked by guardrails".into()));
+        }
+    }
+    let mut cwd = body
+        .cwd
+        .map(PathBuf::from)
+        .or_else(|| st.project_root.read().clone())
+        .unwrap_or_else(|| st.data_dir.clone());
+    if !cwd.exists() {
+        cwd = st.data_dir.clone();
+    }
+    // cd builtin
+    if lower.starts_with("cd ") || lower == "cd" {
+        let rest = cmd[2..].trim();
+        let next = if rest.is_empty() || rest == "~" {
+            dirs::home_dir().unwrap_or(cwd.clone())
+        } else {
+            let p = PathBuf::from(rest);
+            if p.is_absolute() { p } else { cwd.join(p) }
+        };
+        let canon = next.canonicalize().unwrap_or(next);
+        return Ok(Json(serde_json::json!({
+            "ok": true,
+            "stdout": "",
+            "stderr": "",
+            "code": 0,
+            "cwd": canon.display().to_string(),
+        })));
+    }
+
+    #[cfg(windows)]
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", cmd])
+        .current_dir(&cwd)
+        .output();
+    #[cfg(not(windows))]
+    let output = std::process::Command::new("bash")
+        .args(["-lc", cmd])
+        .current_dir(&cwd)
+        .output();
+
+    let output = output.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({
+        "ok": output.status.success(),
+        "stdout": String::from_utf8_lossy(&output.stdout).to_string(),
+        "stderr": String::from_utf8_lossy(&output.stderr).to_string(),
+        "code": output.status.code().unwrap_or(1),
+        "cwd": cwd.display().to_string(),
+    })))
+}

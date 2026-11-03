@@ -11,13 +11,20 @@ import { BrainView } from './brain';
 import { HarnessController } from './harness';
 import { MOODS, nearestMood } from './moods';
 import { SettingsView } from './settings';
+import {
+  bindMenubar, buildMenus, installGlobalMenuGuards, setMenuHandler, showContextMenu, type MenuItem,
+} from './menus';
+import {
+  loadLayout, saveLayout, resetLayout, showPanel, togglePanel, bottomVisible, type LayoutState, type PanelId,
+} from './layout';
+import { TerminalPanel, ConsolePanel } from './terminal';
 
 const params = new URLSearchParams(location.search);
 let mode: Mode = (params.get('mode') as Mode) || 'plain';
 const forcePick = params.get('pick') === '1';
 const demo = params.get('demo') === '1';
 const themeLight = params.get('theme') === 'light';
-const FIX_ROOT = '/workspace/omni-build/fixtures';
+const FIX_ROOT = '/workspace/omni-neural-ide-rebuild/app/fixtures';
 
 const expanded = new Set<string>();
 let projectRoot: string | null = null;
@@ -30,6 +37,11 @@ let cursor = { line: 1, col: 1 };
 let driftMode: 'warn' | 'pause' = 'warn';
 let dnd = false;
 let timers: { id: number; at: number; text: string }[] = [];
+let layoutState: LayoutState = loadLayout((params.get('mode') as Mode) || 'plain');
+let terminal: TerminalPanel | null = null;
+let consolePanel: ConsolePanel | null = null;
+let clipboardPath: { path: string; cut: boolean } | null = null;
+
 
 function shell() {
   const brand = mode === 'ultra'
@@ -58,12 +70,19 @@ function shell() {
       </div>
     </div>
   </div>
-  <div class="menubar">
-    <button>File</button><button>Edit</button><button>Selection</button>
-    <button>View</button><button>Go</button><button>Run</button>
-    <button>Terminal</button><button>Help</button>
+  <div class="menubar" id="menubar">
+    <button data-menu="file"><span class="mi-ico">${svg.files}</span><span class="mi-label-text">File</span></button>
+    <button data-menu="edit"><span class="mi-ico">${svg.code}</span><span class="mi-label-text">Edit</span></button>
+    <button data-menu="selection"><span class="mi-ico">${svg.sidebar}</span><span class="mi-label-text">Selection</span></button>
+    <button data-menu="view"><span class="mi-ico">${svg.panel}</span><span class="mi-label-text">View</span></button>
+    <button data-menu="go"><span class="mi-ico">${svg.search}</span><span class="mi-label-text">Go</span></button>
+    <button data-menu="run"><span class="mi-ico">${svg.play}</span><span class="mi-label-text">Run</span></button>
+    <button data-menu="terminal"><span class="mi-ico">${svg.blocks}</span><span class="mi-label-text">Terminal</span></button>
+    <button data-menu="app"><span class="mi-ico">${svg.grid}</span><span class="mi-label-text">App</span></button>
+    <button data-menu="help"><span class="mi-ico">${svg.help}</span><span class="mi-label-text">Help</span></button>
   </div>
-  <div class="workspace">
+  <div class="work-stack">
+  <div class="workspace-row" id="workspace-row">
     <div class="activity">
       <div class="top">
         <button class="active" data-act="explorer" title="Explorer">${svg.files}</button>
@@ -83,20 +102,20 @@ function shell() {
         <span class="label">EXPLORER</span>
         <span class="project-title">OMNI-CODE</span>
         <div class="sidebar-actions">
-          <button title="New File" class="codicon codicon-new-file"></button>
-          <button title="New Folder" class="codicon codicon-new-folder"></button>
+          <button title="New File" data-act="new-file" class="codicon codicon-new-file"></button>
+          <button title="New Folder" data-act="new-folder" class="codicon codicon-new-folder"></button>
           <button title="Refresh" data-act="refresh" class="codicon codicon-refresh"></button>
           <button title="Open Folder" data-act="open" class="codicon codicon-ellipsis"></button>
         </div>
       </div>
       <div class="file-tree" id="file-tree"></div>
-      <div class="sidebar-sections">
-        <div class="sidebar-section">▸ OUTLINE</div>
-        <div class="sidebar-section">▸ TIMELINE</div>
+      <div class="sidebar-sections" id="sidebar-sections">
+        <div class="sidebar-section" data-panel="outline">▸ OUTLINE</div>
+        <div class="sidebar-section" data-panel="timeline">▸ TIMELINE</div>
       </div>
     </div>
     <div class="resizer-v" id="resize-side"></div>
-    <div class="editor-col">
+    <div class="editor-col" id="editor-col">
       <div class="tabbar" id="tabbar"></div>
       <div class="breadcrumbs" id="breadcrumbs"><span class="crumb">No file open</span></div>
       <div class="monaco-host" id="monaco"></div>
@@ -108,6 +127,24 @@ function shell() {
     </div>
     <div class="resizer-v" id="resize-chat"></div>
     <div class="chat" id="chat"></div>
+    <div class="resizer-v" id="resize-presence"></div>
+    <div class="presence-col" id="presence-col"><div class="presence-host" id="presence-host"></div></div>
+  </div>
+  <div class="resizer-h" id="resize-bottom"></div>
+  <div class="bottom-dock" id="bottom-dock">
+    <div class="bottom-tabs" id="bottom-tabs">
+      <button data-btab="terminal" class="active">Terminal</button>
+      <button data-btab="console">Console</button>
+      <button data-btab="problems">Problems</button>
+      <button data-btab="output">Output</button>
+    </div>
+    <div class="bottom-body">
+      <div class="bottom-pane active" id="pane-terminal"></div>
+      <div class="bottom-pane" id="pane-console"></div>
+      <div class="bottom-pane" id="pane-problems"><div class="panel-placeholder">No problems detected.</div></div>
+      <div class="bottom-pane" id="pane-output"><div class="panel-placeholder">Output channel.</div></div>
+    </div>
+  </div>
   </div>
   <div class="statusbar">
     <div class="left">
@@ -125,8 +162,9 @@ function shell() {
       <span class="item plain-only">3.11.4 64-bit</span>
     </div>
     <div class="right">
-      <span class="item plain-only">OMNI-CODE 1.0.0</span>
+      <span class="item plain-only">OMNI-CODE 1.3.0</span>
       <span class="badge plain-only">Insiders</span>
+      <span class="item ultra-only">OMNI 1.3.0</span>
       <span class="item ultra-only">🔔</span>
       <span class="item ultra-only">↻</span>
       <span class="item ultra-only">▶</span>
@@ -299,8 +337,25 @@ function bindChrome() {
   };
   harness.driftMode = driftMode;
 
-  setupResize(document.getElementById('resize-side')!, document.getElementById('sidebar')!, 160, 420, false);
-  setupResize(document.getElementById('resize-chat')!, document.getElementById('chat')!, 260, 480, true);
+  setupResize(document.getElementById('resize-side')!, document.getElementById('sidebar')!, 160, 420, false, (w) => { layoutState.widths.sidebar = w; saveLayout(mode, layoutState); });
+  setupResize(document.getElementById('resize-chat')!, document.getElementById('chat')!, 260, 480, true, (w) => { layoutState.widths.chat = w; saveLayout(mode, layoutState); });
+  const rp = document.getElementById('resize-presence');
+  const pc = document.getElementById('presence-col');
+  if (rp && pc) setupResize(rp, pc, 220, 480, false, (w) => { layoutState.widths.presence = w; saveLayout(mode, layoutState); });
+  setupBottomResize();
+  document.getElementById('bottom-tabs')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button[data-btab]') as HTMLElement | null;
+    if (!btn) return;
+    const id = btn.dataset.btab as LayoutState['bottomTab'];
+    layoutState.bottomTab = id;
+    layoutState = showPanel(layoutState, id);
+    applyLayout();
+  });
+  document.querySelector('[data-act="new-file"]')?.addEventListener('click', () => handleMenu('file.new'));
+  document.querySelector('[data-act="new-folder"]')?.addEventListener('click', () => handleMenu('file.newFolder'));
+  document.querySelector('[data-act="explorer"]')?.addEventListener('click', () => { layoutState.visible.explorer = true; applyLayout(); });
+  document.querySelector('[data-act="search"]')?.addEventListener('click', () => { layoutState = showPanel(layoutState, 'search'); applyLayout(); alert('Search panel — use Ctrl+P / Find for now'); });
+  document.querySelector('[data-act="git"]')?.addEventListener('click', () => { layoutState = showPanel(layoutState, 'scm'); applyLayout(); });
 
   window.addEventListener('keydown', async e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -325,7 +380,7 @@ function bindChrome() {
   });
 }
 
-function setupResize(handle: HTMLElement, target: HTMLElement, min: number, max: number, reverse: boolean) {
+function setupResize(handle: HTMLElement, target: HTMLElement, min: number, max: number, reverse: boolean, onDone?: (w: number) => void) {
   let startX = 0, startW = 0;
   handle.addEventListener('pointerdown', e => {
     startX = e.clientX; startW = target.getBoundingClientRect().width;
@@ -337,6 +392,30 @@ function setupResize(handle: HTMLElement, target: HTMLElement, min: number, max:
     const w = Math.min(max, Math.max(min, reverse ? startW - dx : startW + dx));
     target.style.width = `${w}px`;
   });
+  handle.addEventListener('pointerup', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    handle.releasePointerCapture(e.pointerId);
+    onDone?.(target.getBoundingClientRect().width);
+  });
+}
+
+function setupBottomResize() {
+  const handle = document.getElementById('resize-bottom');
+  const dock = document.getElementById('bottom-dock');
+  if (!handle || !dock) return;
+  let startY = 0, startH = 0;
+  handle.addEventListener('pointerdown', e => {
+    startY = e.clientY; startH = dock.getBoundingClientRect().height;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    const dy = startY - e.clientY;
+    const h = Math.min(window.innerHeight * 0.5, Math.max(120, startH + dy));
+    dock.style.height = `${h}px`;
+    layoutState.bottomH = h;
+  });
+  handle.addEventListener('pointerup', () => saveLayout(mode, layoutState));
 }
 
 async function openProject(path: string) {
@@ -355,6 +434,8 @@ async function openProject(path: string) {
     ]);
   }
   renderTree(document.getElementById('file-tree')!, tree, null, onOpenFile, expanded, []);
+  terminal?.setCwd(projectRoot || '');
+  consolePanel?.log(`Opened ${projectRoot}`);
   const title = document.querySelector('.sidebar-header .project-title');
   if (title) title.textContent = mode==='plain' ? 'OMNI-CODE' : (tree.name || 'PROJECT').toUpperCase();
   const label = document.querySelector('.sidebar-header .label');
@@ -412,8 +493,379 @@ async function bootDemo() {
   }
 }
 
+
+
+function dockPresence() {
+  const host = document.getElementById('presence-host');
+  const root = document.getElementById('assistant-root');
+  if (!host || !root) return;
+  host.appendChild(root);
+  document.body.classList.add('presence-docked');
+  root.classList.remove('assistant-hidden', 'assistant-tucked');
+}
+
+function applyLayout() {
+  const s = layoutState;
+  const side = document.getElementById('sidebar');
+  const chatEl = document.getElementById('chat');
+  const presence = document.getElementById('presence-col');
+  const bottom = document.getElementById('bottom-dock');
+  const resizePres = document.getElementById('resize-presence');
+  const resizeChat = document.getElementById('resize-chat');
+  const resizeSide = document.getElementById('resize-side');
+  if (side) {
+    side.classList.toggle('hidden', !s.visible.explorer);
+    side.style.width = `${s.widths.sidebar}px`;
+  }
+  if (chatEl) {
+    chatEl.style.display = s.visible.chat ? '' : 'none';
+    chatEl.style.width = `${s.widths.chat}px`;
+  }
+  if (presence) {
+    presence.classList.toggle('hidden', !s.visible.presence);
+    presence.style.width = `${s.widths.presence}px`;
+  }
+  if (resizePres) resizePres.style.display = s.visible.presence ? '' : 'none';
+  if (resizeChat) resizeChat.style.display = s.visible.chat ? '' : 'none';
+  if (resizeSide) resizeSide.style.display = s.visible.explorer ? '' : 'none';
+  const showBottom = bottomVisible(s);
+  if (bottom) {
+    bottom.classList.toggle('visible', showBottom);
+    bottom.style.height = `${s.bottomH}px`;
+  }
+  const rb = document.getElementById('resize-bottom');
+  if (rb) rb.style.display = showBottom ? '' : 'none';
+  // bottom tabs
+  document.querySelectorAll('#bottom-tabs button').forEach((b) => {
+    const id = (b as HTMLElement).dataset.btab!;
+    b.classList.toggle('active', id === s.bottomTab);
+    (b as HTMLElement).style.display = s.visible[id as PanelId] || id === s.bottomTab ? '' : 'none';
+  });
+  document.querySelectorAll('.bottom-pane').forEach((p) => {
+    p.classList.toggle('active', p.id === `pane-${s.bottomTab}`);
+  });
+  // outline/timeline
+  document.querySelectorAll('[data-panel="outline"]').forEach((el) => {
+    (el as HTMLElement).style.display = s.visible.outline ? '' : 'none';
+  });
+  document.querySelectorAll('[data-panel="timeline"]').forEach((el) => {
+    (el as HTMLElement).style.display = s.visible.timeline ? '' : 'none';
+  });
+  ensureBottomPanels();
+  saveLayout(mode, s);
+}
+
+function ensureBottomPanels() {
+  if (layoutState.visible.terminal || layoutState.bottomTab === 'terminal') {
+    const host = document.getElementById('pane-terminal');
+    if (host && !terminal) terminal = new TerminalPanel(host, projectRoot || '');
+    else if (terminal && projectRoot) terminal.setCwd(projectRoot);
+  }
+  if (layoutState.visible.console || layoutState.bottomTab === 'console') {
+    const host = document.getElementById('pane-console');
+    if (host && !consolePanel) consolePanel = new ConsolePanel(host);
+  }
+}
+
+async function runUpdateFromUi() {
+  try {
+    consolePanel?.log('Checking for updates…');
+    const chk = await api.updateCheck();
+    if (!chk.available) {
+      alert(`Already up to date (${chk.current}).`);
+      consolePanel?.log(`Up to date: ${chk.current}`);
+      return;
+    }
+    if (!confirm(`Update ${chk.current} → ${chk.latest}? The app will restart.`)) return;
+    const a = await api.updateApply(mode);
+    alert(a.message);
+    consolePanel?.log(a.message);
+  } catch (e: any) {
+    alert(e.message || String(e));
+  }
+}
+
+async function refreshTree(select?: string | null) {
+  try {
+    const r = await api.tree();
+    tree = r.tree; projectRoot = r.root;
+    renderTree(document.getElementById('file-tree')!, tree, select || getActive()?.path || null, onOpenFile, expanded, select ? [select] : (getActive()?.path ? [getActive()!.path] : []));
+  } catch {}
+}
+
+async function handleMenu(id: string) {
+  const active = getActive();
+  switch (id) {
+    case 'file.new': {
+      if (!projectRoot) return alert('Open a folder first');
+      const name = prompt('New file name', 'untitled.txt');
+      if (!name) return;
+      const path = projectRoot.replace(/\\/g, '/') + '/' + name;
+      await api.writeFile(path, '');
+      await refreshTree(path);
+      await onOpenFile({ name, path, kind: 'file' });
+      break;
+    }
+    case 'file.newFolder': {
+      if (!projectRoot) return alert('Open a folder first');
+      const name = prompt('New folder name', 'new-folder');
+      if (!name) return;
+      await api.mkdir(projectRoot.replace(/\\/g, '/') + '/' + name);
+      await refreshTree();
+      break;
+    }
+    case 'file.open': {
+      const path = prompt('Folder path to open', projectRoot || FIX_ROOT + '/' + mode);
+      if (path) await openProject(path);
+      break;
+    }
+    case 'file.save': {
+      if (!active) return;
+      await api.writeFile(active.path, active.content);
+      active.dirty = false; paintTabs();
+      break;
+    }
+    case 'file.saveAs': {
+      if (!active) return;
+      const to = prompt('Save as path', active.path);
+      if (!to) return;
+      await api.writeFile(to, active.content);
+      await refreshTree(to);
+      await onOpenFile({ name: to.split(/[/\\\\]/).pop()!, path: to, kind: 'file' });
+      break;
+    }
+    case 'file.saveAll': {
+      for (const tab of getTabs()) {
+        if (tab.dirty) {
+          await api.writeFile(tab.path, tab.content);
+          tab.dirty = false;
+        }
+      }
+      paintTabs();
+      break;
+    }
+    case 'file.close': if (active) { closeTab(active.path); paintTabs(); paintBreadcrumbs(); } break;
+    case 'file.closeOthers': {
+      if (!active) return;
+      for (const tab of [...getTabs()]) if (tab.path !== active.path) closeTab(tab.path);
+      paintTabs();
+      break;
+    }
+    case 'file.closeAll': {
+      for (const tab of [...getTabs()]) closeTab(tab.path);
+      paintTabs(); paintBreadcrumbs();
+      break;
+    }
+    case 'file.copyPath': if (active) await navigator.clipboard.writeText(active.path); break;
+    case 'file.reveal': if (active) alert(`Path:\n${active.path}`); break;
+    case 'file.update':
+    case 'app.update': await runUpdateFromUi(); break;
+    case 'edit.undo': document.execCommand('undo'); break;
+    case 'edit.redo': document.execCommand('redo'); break;
+    case 'edit.cut': document.execCommand('cut'); break;
+    case 'edit.copy': document.execCommand('copy'); break;
+    case 'edit.paste': document.execCommand('paste'); break;
+    case 'edit.find': window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true })); break;
+    case 'view.explorer': layoutState = togglePanel(layoutState, 'explorer'); applyLayout(); break;
+    case 'view.terminal': layoutState = showPanel(layoutState, 'terminal'); layoutState.bottomTab = 'terminal'; applyLayout(); terminal?.focus(); break;
+    case 'view.console': layoutState = showPanel(layoutState, 'console'); layoutState.bottomTab = 'console'; applyLayout(); break;
+    case 'view.presence': layoutState = togglePanel(layoutState, 'presence'); applyLayout(); break;
+    case 'view.fullscreen': {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+      else await document.exitFullscreen?.();
+      break;
+    }
+    case 'term.new': layoutState = showPanel(layoutState, 'terminal'); layoutState.bottomTab = 'terminal'; applyLayout(); terminal?.focus(); break;
+    case 'term.clear': terminal?.clear(); break;
+    case 'app.resetLayout': layoutState = resetLayout(mode); applyLayout(); break;
+    case 'app.settings': SettingsView.open(document.body); break;
+    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.0`); break;
+    case 'help.docs': window.open('https://github.com/tattooinmtl/omni-neural-ide', '_blank'); break;
+    default:
+      if (id.startsWith('panel.')) {
+        const pid = id.slice(6) as PanelId;
+        layoutState = showPanel(layoutState, pid);
+        if (pid === 'terminal' || pid === 'console' || pid === 'problems' || pid === 'output') {
+          layoutState.bottomTab = pid === 'console' ? 'console' : pid === 'problems' ? 'problems' : pid === 'output' ? 'output' : 'terminal';
+        }
+        applyLayout();
+        installMenus(); // refresh checks
+      }
+  }
+}
+
+function installMenus() {
+  const bar = document.getElementById('menubar');
+  if (!bar) return;
+  setMenuHandler(handleMenu);
+  installGlobalMenuGuards();
+  const menus = buildMenus({ ultra: mode === 'ultra', panels: layoutState.visible as any });
+  bindMenubar(bar, menus);
+}
+
+function installContextMenus() {
+  const treeEl = document.getElementById('file-tree');
+  treeEl?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const item = (e.target as HTMLElement).closest('.tree-item') as HTMLElement | null;
+    const path = item?.dataset.path ? decodeURIComponent(item.dataset.path) : projectRoot;
+    const items: MenuItem[] = [
+      { type: 'item', id: 'ctx.newFile', label: 'New File' },
+      { type: 'item', id: 'ctx.newFolder', label: 'New Folder' },
+      { type: 'sep' },
+      { type: 'item', id: 'ctx.rename', label: 'Rename…', disabled: !item },
+      { type: 'item', id: 'ctx.delete', label: 'Delete', disabled: !item },
+      { type: 'sep' },
+      { type: 'item', id: 'ctx.cut', label: 'Cut', disabled: !item },
+      { type: 'item', id: 'ctx.copy', label: 'Copy', disabled: !item },
+      { type: 'item', id: 'ctx.paste', label: 'Paste', disabled: !clipboardPath || !path },
+      { type: 'item', id: 'ctx.duplicate', label: 'Duplicate', disabled: !item },
+      { type: 'sep' },
+      { type: 'item', id: 'ctx.copyPath', label: 'Copy Path', disabled: !path },
+      { type: 'item', id: 'ctx.reveal', label: 'Reveal', disabled: !path },
+    ];
+    setMenuHandler(async (id) => {
+      try {
+        if (id === 'ctx.newFile') await handleMenu('file.new');
+        else if (id === 'ctx.newFolder') await handleMenu('file.newFolder');
+        else if (id === 'ctx.rename' && path) {
+          const base = path.split(/[/\\\\]/).pop()!;
+          const name = prompt('Rename to', base);
+          if (!name || name === base) return;
+          const to = path.replace(/[/\\\\][^/\\\\]+$/, '/' + name);
+          await api.renamePath(path, to);
+          await refreshTree(to);
+        } else if (id === 'ctx.delete' && path) {
+          if (!confirm(`Delete ${path}?`)) return;
+          await api.deletePath(path, true);
+          closeTab(path);
+          await refreshTree();
+        } else if (id === 'ctx.cut' && path) clipboardPath = { path, cut: true };
+        else if (id === 'ctx.copy' && path) clipboardPath = { path, cut: false };
+        else if (id === 'ctx.paste' && clipboardPath && path) {
+          const src = clipboardPath.path;
+          const name = src.split(/[/\\\\]/).pop()!;
+          const destDir = path; // paste into clicked folder/root
+          const to = destDir.replace(/\\\\/g, '/') + '/' + name;
+          if (clipboardPath.cut) await api.renamePath(src, to);
+          else await api.copyPath(src, to);
+          clipboardPath = null;
+          await refreshTree(to);
+        } else if (id === 'ctx.duplicate' && path) {
+          const to = path + '.copy';
+          await api.copyPath(path, to);
+          await refreshTree(to);
+        } else if (id === 'ctx.copyPath' && path) await navigator.clipboard.writeText(path);
+        else if (id === 'ctx.reveal' && path) alert(path);
+      } catch (err: any) { alert(err.message || String(err)); }
+    });
+    showContextMenu(e.clientX, e.clientY, items);
+  });
+
+  document.getElementById('tabbar')?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const tab = (e.target as HTMLElement).closest('.tab') as HTMLElement | null;
+    const path = tab?.dataset.path ? decodeURIComponent(tab.dataset.path) : getActive()?.path;
+    const items: MenuItem[] = [
+      { type: 'item', id: 'tab.save', label: 'Save', disabled: !path },
+      { type: 'item', id: 'tab.rename', label: 'Rename…', disabled: !path },
+      { type: 'sep' },
+      { type: 'item', id: 'tab.close', label: 'Close', disabled: !path },
+      { type: 'item', id: 'tab.closeOthers', label: 'Close Others' },
+      { type: 'item', id: 'tab.closeAll', label: 'Close All' },
+      { type: 'sep' },
+      { type: 'item', id: 'tab.copyPath', label: 'Copy Path', disabled: !path },
+      { type: 'item', id: 'tab.delete', label: 'Delete File', disabled: !path },
+    ];
+    setMenuHandler(async (id) => {
+      try {
+        if (id === 'tab.save') await handleMenu('file.save');
+        else if (id === 'tab.close') await handleMenu('file.close');
+        else if (id === 'tab.closeOthers') await handleMenu('file.closeOthers');
+        else if (id === 'tab.closeAll') await handleMenu('file.closeAll');
+        else if (id === 'tab.copyPath' && path) await navigator.clipboard.writeText(path);
+        else if (id === 'tab.rename' && path) {
+          const base = path.split(/[/\\\\]/).pop()!;
+          const name = prompt('Rename to', base);
+          if (!name || name === base) return;
+          const to = path.replace(/[/\\\\][^/\\\\]+$/, '/' + name);
+          const content = getTabs().find(t => t.path === path)?.content ?? (await api.readFile(path)).content;
+          await api.renamePath(path, to);
+          closeTab(path);
+          await api.writeFile(to, content);
+          await refreshTree(to);
+          await onOpenFile({ name, path: to, kind: 'file' });
+        } else if (id === 'tab.delete' && path) {
+          if (!confirm(`Delete ${path}?`)) return;
+          await api.deletePath(path, true);
+          closeTab(path);
+          await refreshTree();
+        }
+      } catch (err: any) { alert(err.message || String(err)); }
+    });
+    showContextMenu(e.clientX, e.clientY, items);
+  });
+
+  document.getElementById('monaco')?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, [
+      { type: 'item', id: 'edit.cut', label: 'Cut' },
+      { type: 'item', id: 'edit.copy', label: 'Copy' },
+      { type: 'item', id: 'edit.paste', label: 'Paste' },
+      { type: 'sep' },
+      { type: 'item', id: 'edit.find', label: 'Find' },
+      { type: 'item', id: 'go.line', label: 'Go to Line…' },
+    ]);
+    setMenuHandler(handleMenu);
+  });
+
+  document.getElementById('chat')?.addEventListener('contextmenu', (e) => {
+    const msg = (e.target as HTMLElement).closest('.msg');
+    if (!msg) return;
+    e.preventDefault();
+    const text = (msg.querySelector('.msg-body') as HTMLElement)?.innerText || '';
+    showContextMenu(e.clientX, e.clientY, [
+      { type: 'item', id: 'chat.copy', label: 'Copy message' },
+      { type: 'item', id: 'chat.insert', label: 'Insert into editor' },
+    ]);
+    setMenuHandler(async (id) => {
+      if (id === 'chat.copy') await navigator.clipboard.writeText(text);
+      if (id === 'chat.insert' && getActive()) {
+        const t = getActive()!;
+        t.content += (t.content.endsWith('\\n') ? '' : '\\n') + text;
+        t.dirty = true;
+        // reopen to refresh monaco
+        openTab(t.path, t.content);
+        paintTabs();
+      }
+    });
+  });
+
+  document.getElementById('presence-col')?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, [
+      { type: 'item', id: 'view.presence', label: 'Hide Omni Presence' },
+      { type: 'item', id: 'app.resetLayout', label: 'Reset Layout' },
+    ]);
+    setMenuHandler(handleMenu);
+  });
+
+  document.getElementById('bottom-dock')?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, [
+      { type: 'item', id: 'term.clear', label: 'Clear' },
+      { type: 'item', id: 'term.new', label: 'New Terminal' },
+      { type: 'sep' },
+      { type: 'item', id: 'panel.console', label: 'Show Console' },
+    ]);
+    setMenuHandler(handleMenu);
+  });
+}
+
+
 async function boot() {
-  document.documentElement.classList.add('shot');
+  if (params.get('shot') === '1') document.documentElement.classList.add('shot');
+  else document.documentElement.classList.remove('shot');
   document.body.classList.remove('mode-plain', 'mode-ultra', 'mode-light');
   document.body.classList.add(themeLight ? 'mode-light' : `mode-${mode}`);
   document.title = mode === 'ultra' ? 'OMNI-CODE Ultra' : 'OMNI-CODE';
@@ -427,9 +879,13 @@ async function boot() {
   assistant = FloatingAssistant.create(document.getElementById('assistant-root')!);
   (window as any).__omniReloadConfig = () => assistant.reloadConfig();
   (window as any).__codingChat = chat;
-  (window as any).__omniReloadConfig = () => assistant.reloadConfig();
   (assistant as any).moods = MOODS;
   setTimeout(() => assistant.greet(), 500);
+  layoutState = loadLayout(mode);
+  applyLayout();
+  installMenus();
+  installContextMenus();
+  dockPresence();
   // periodic presence remarks
   setInterval(() => {
     try { assistant.maybeVolunteer('User is coding in OMNI-CODE. Offer a short witty remark or stay silent.'); } catch {}

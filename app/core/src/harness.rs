@@ -11,7 +11,7 @@ pub struct SlashIn {
 
 const SLASH: &[&str] = &[
     "plan", "checkpoint", "steer", "note", "audit", "rollback", "eval", "diff", "accept",
-    "reject", "tools", "skills", "status", "create-skill", "create-tool",
+    "reject", "tools", "skills", "status", "create-skill", "create-tool", "update",
 ];
 
 pub async fn slash(State(st): State<Arc<AppState>>, Json(body): Json<SlashIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
@@ -77,6 +77,20 @@ pub async fn slash(State(st): State<Arc<AppState>>, Json(body): Json<SlashIn>) -
             // read-only machine audit
             let home = dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default();
             format!("Read-only audit\nHome: {home}\nData: {}\nOS: {}", st.data_dir.display(), std::env::consts::OS)
+        }
+        "update" => {
+            // Signal UI to run /api/update/apply; also attempt a check here for message.
+            match crate::update::check(axum::extract::State(st.clone())).await {
+                Ok(j) => {
+                    let info = j.0;
+                    if info.available {
+                        format!("Update available: {} → {}. Applying… (UI will restart)", info.current, info.latest.unwrap_or_default())
+                    } else {
+                        format!("Already on latest ({})", info.current)
+                    }
+                }
+                Err((_, e)) => format!("Update check failed: {e}"),
+            }
         }
         "accept" | "reject" | "steer" | "eval" | "rollback" | "tools" | "skills" | "create-skill" | "create-tool" => {
             format!("/{cmd} queued in harness loop. Args: {}", if body.args.is_empty() { "(none)" } else { &body.args })
