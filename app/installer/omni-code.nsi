@@ -1,14 +1,14 @@
-; OMNI-CODE v1.0.1 per-user Windows installer (no admin)
+; OMNI-CODE v1.0.2 per-user Windows installer (no admin)
 ; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.0.1"
+!define PRODUCT_VERSION "1.0.2"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.0.1.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.0.2.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user
@@ -25,8 +25,8 @@ BrandingText "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 !include "WinVer.nsh"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+!define MUI_ICON "..\..\..\omni-installer\icons\omni.ico"
+!define MUI_UNICON "..\..\..\omni-installer\icons\omni.ico"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\bin\launcher.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch OMNI-CODE"
 !define MUI_FINISHPAGE_LINK "OMNI-CODE on GitHub"
@@ -132,6 +132,10 @@ Section "OMNI-CODE (required)" SecMain
 
   SetOutPath "$INSTDIR"
   File "/oname=README.txt" "..\..\..\omni-installer\payload\README.txt"
+  SetOutPath "$INSTDIR\assets"
+  File "/oname=omni-logo.bmp" "..\..\..\omni-installer\payload\assets\omni-logo.bmp"
+  File "/oname=omni.ico" "..\..\..\omni-installer\payload\assets\omni.ico"
+  File "/oname=omni-icon-256.png" "..\..\..\omni-installer\payload\assets\omni-icon-256.png"
   SetOutPath "$INSTDIR\webview2"
   File "/oname=MicrosoftEdgeWebview2Setup.exe" "..\..\..\omni-installer\payload\webview2\MicrosoftEdgeWebview2Setup.exe"
 

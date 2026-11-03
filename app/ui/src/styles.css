@@ -229,3 +229,35 @@ body.mode-ultra #app{background:var(--bg-title)}
 
 html.shot .resizer-v{width:0!important;min-width:0!important;pointer-events:none}
 html.shot .sidebar,html.shot .chat{flex-shrink:0}
+
+/* ===== Settings (VS Code-style categories) ===== */
+.settings-overlay{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);display:grid;place-items:center}
+.settings-shell{width:min(920px,94vw);height:min(620px,86vh);background:#0d151c;border:1px solid #1e2e3e;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.settings-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1e2e3e;color:#e8eef4;font-weight:600}
+.settings-close{color:#9aa7b5;font-size:16px;padding:4px 8px}
+.settings-close:hover{color:#fff}
+.settings-body{flex:1;display:flex;min-height:0}
+.settings-cats{width:220px;min-width:220px;background:#0a1218;border-right:1px solid #1e2e3e;padding:8px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.settings-cat{text-align:left;padding:8px 12px;border-radius:6px;color:#9aa7b5;font-size:13px}
+.settings-cat:hover{background:#121c26;color:#e8eef4}
+.settings-cat.active{background:#14304a;color:#7dd3fc}
+.settings-page{flex:1;padding:20px 24px;overflow:auto;color:#e8eef4}
+.settings-page h2{margin:0 0 8px;font-size:18px}
+.settings-hint{color:#9aa7b5;font-size:12px;margin:0 0 16px;line-height:1.45}
+.settings-field{display:grid;gap:6px;margin-bottom:14px;font-size:12px;color:#9aa7b5}
+.settings-field input[type=text],.settings-field input[type=password],.settings-field input[type=number],.settings-field select{
+  background:#061018;border:1px solid #1e2e3e;border-radius:6px;padding:8px 10px;color:#e8eef4;font-size:13px}
+.settings-secret{display:flex;gap:8px}
+.settings-secret input{flex:1}
+.settings-btn{padding:8px 14px;border-radius:6px;background:#1a2a3a;color:#e8eef4;font-size:12px}
+.settings-btn.ghost{background:#0c1822;border:1px solid #1e2e3e}
+.settings-btn.primary{background:#2563eb}
+.settings-btn:hover{filter:brightness(1.1)}
+.settings-actions{display:flex;align-items:center;gap:12px;margin-top:8px}
+.settings-status{font-size:12px;color:#9aa7b5}
+.settings-status.ok{color:#34d399}
+.settings-status.err{color:#f87171}
+.settings-list{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.settings-list li{display:flex;gap:12px;align-items:center;font-size:13px;color:#c5d0da}
+.settings-list kbd{background:#121c26;border:1px solid #243040;border-radius:4px;padding:2px 6px;font-size:11px;color:#7dd3fc}
+.settings-providers{max-width:480px}

@@ -10,6 +10,7 @@ import { FloatingAssistant } from './assistant';
 import { BrainView } from './brain';
 import { HarnessController } from './harness';
 import { MOODS } from './moods';
+import { SettingsView } from './settings';
 
 const params = new URLSearchParams(location.search);
 let mode: Mode = (params.get('mode') as Mode) || 'plain';
@@ -146,17 +147,11 @@ function shell() {
   <div class="overlay ${forcePick && !demo ? '' : 'hidden'}" id="overlay">
     <div class="overlay-card">
       <h1>Launch OMNI-CODE</h1>
-      <p>Choose a layout every launch. Provider keys stay on this machine.</p>
+      <p>Choose a layout every launch. Provider keys are in Settings → Providers.</p>
       <button class="choice" data-mode="plain"><strong>OMNI-CODE</strong><span> Classic dark layout</span></button>
       <button class="choice" data-mode="ultra"><strong>OMNI-CODE Ultra</strong><span> Alive layout</span></button>
-      <div class="keys-form">
-        <label>MiniMax API key<input id="key-minimax" type="password" autocomplete="off"/></label>
-        <label>NVIDIA API key<input id="key-nvidia" type="password" autocomplete="off"/></label>
-        <div class="row-actions">
-          <button type="button" id="save-keys">Save keys</button>
-          <button type="button" class="primary" id="open-demo-folder">Continue</button>
-        </div>
-      </div>
+      <p class="keys-form" style="color:var(--fg-dim);font-size:12px">Set API keys anytime under Settings → Providers.</p>
+      <div class="row-actions"><button type="button" class="primary" id="open-demo-folder">Continue</button></div>
     </div>
   </div>`;
 }
@@ -271,12 +266,6 @@ function bindChrome() {
       location.search = `?mode=${(btn as HTMLElement).dataset.mode}${demo ? '&demo=1' : ''}`;
     });
   });
-  document.getElementById('save-keys')?.addEventListener('click', async () => {
-    const minimax = (document.getElementById('key-minimax') as HTMLInputElement).value.trim();
-    const nvidia = (document.getElementById('key-nvidia') as HTMLInputElement).value.trim();
-    try { await api.setKeys(minimax || undefined, nvidia || undefined); alert('Keys saved'); }
-    catch (e: any) { alert(e.message); }
-  });
   document.getElementById('open-demo-folder')?.addEventListener('click', () => {
     document.getElementById('overlay')?.classList.add('hidden');
   });
@@ -296,7 +285,7 @@ function bindChrome() {
     } catch {}
   });
   document.querySelector('[data-act="settings"]')?.addEventListener('click', () => {
-    document.body.classList.toggle('mode-light');
+    SettingsView.open(document.body);
   });
   document.getElementById('rev-accept')?.addEventListener('click', async () => { await harness.accept(); document.getElementById('review-gate')?.classList.add('hidden'); });
   document.getElementById('rev-reject')?.addEventListener('click', async () => { await harness.reject(); document.getElementById('review-gate')?.classList.add('hidden'); });

@@ -46,6 +46,7 @@ export const api = {
       body: JSON.stringify({ cmd, args }),
     }),
   config: () => req<{ mode: Mode; projectRoot: string | null; models: string[]; hasMinimax: boolean; hasNvidia: boolean }>('/api/config'),
+  getKeys: () => req<{ minimax: string; nvidia: string; hasMinimax: boolean; hasNvidia: boolean }>('/api/keys'),
   setKeys: (minimax?: string, nvidia?: string) =>
     req<{ ok: boolean }>('/api/keys', { method: 'POST', body: JSON.stringify({ minimax, nvidia }) }),
 };

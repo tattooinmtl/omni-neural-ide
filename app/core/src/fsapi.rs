@@ -52,6 +52,28 @@ pub struct KeysIn {
     pub nvidia: Option<String>,
 }
 
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeysOut {
+    pub minimax: String,
+    pub nvidia: String,
+    pub has_minimax: bool,
+    pub has_nvidia: bool,
+}
+
+pub async fn get_keys(State(st): S) -> Json<KeysOut> {
+    let keys = st.keys.read().clone();
+    let mm = keys.minimax.clone().unwrap_or_default();
+    let nv = keys.nvidia.clone().unwrap_or_default();
+    Json(KeysOut {
+        has_minimax: !mm.is_empty(),
+        has_nvidia: !nv.is_empty(),
+        minimax: mm,
+        nvidia: nv,
+    })
+}
+
 pub async fn set_keys(State(st): S, Json(body): Json<KeysIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let mut keys = st.keys.read().clone();
     if let Some(v) = body.minimax {

@@ -149,7 +149,7 @@ export class ChatPanel {
     } catch (e: any) {
       this.messages.push({
         role: 'assistant',
-        content: `Could not reach the model API (${e.message}). Enter MiniMax / NVIDIA keys in the launcher, then try again.`,
+        content: `Could not reach the model API (${e.message}). Set MiniMax / NVIDIA keys in Settings → Providers, then try again.`,
       });
       this.times.push('');
     } finally {

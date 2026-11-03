@@ -1,4 +1,4 @@
-# OMNI-CODE copy-install (dev / portable). Prefer OMNI-CODE-Setup-1.0.1.exe from Releases.
+# OMNI-CODE copy-install (dev / portable). Prefer OMNI-CODE-Setup-1.0.2.exe from Releases.
 $ErrorActionPreference = "Stop"
 if ($env:OMNI_HOME -and $env:OMNI_HOME.Trim() -ne "") {
   $Root = $env:OMNI_HOME

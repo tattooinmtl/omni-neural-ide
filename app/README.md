@@ -4,7 +4,7 @@ Desktop AI coding harness. **No Electron.** Native Win32 Go launcher → Rust co
 
 ## Install (Windows)
 
-Download **OMNI-CODE-Setup-1.0.1.exe** from GitHub Releases and double-click.
+Download **OMNI-CODE-Setup-1.0.2.exe** from GitHub Releases and double-click.
 No npm, cargo, or go required on the target PC.
 
 - Install root: `%USERPROFILE%\.omni-neural-ide`

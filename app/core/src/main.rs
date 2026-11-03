@@ -154,7 +154,7 @@ async fn run() -> anyhow::Result<()> {
     let api = Router::new()
         .route("/api/health", get(fsapi::health))
         .route("/api/config", get(fsapi::config))
-        .route("/api/keys", post(fsapi::set_keys))
+        .route("/api/keys", get(fsapi::get_keys).post(fsapi::set_keys))
         .route("/api/fs/list", get(fsapi::list_dir))
         .route("/api/fs/read", get(fsapi::read_file))
         .route("/api/fs/write", post(fsapi::write_file))

@@ -1,6 +1,6 @@
 [package]
 name = "omni-core"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "OMNI-CODE / Ultra Rust core — harness, guardrails, API, native window"
 
@@ -31,3 +31,4 @@ parking_lot = "0.12"
 [target.'cfg(windows)'.dependencies]
 wry = { version = "0.47", optional = true }
 tao = { version = "0.30", optional = true }
+
