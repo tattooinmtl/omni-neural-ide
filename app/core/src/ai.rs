@@ -25,6 +25,10 @@ pub struct ChatOut {
 #[derive(Deserialize)]
 pub struct OmniIn {
     pub message: String,
+    pub system: Option<String>,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -85,10 +89,10 @@ pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>
         }
     }
     let history: Vec<Msg> = st.omni_history.read().iter().map(|(r,c)| Msg{role:r.clone(), content:c.clone()}).collect();
-    let system = "You are Omni the Presence — a witty, watchful companion living inside OMNI-CODE. \
-You are NOT the coding agent. You joke, comment on the project or conversation, encourage the user, \
-and keep replies short (1-3 sentences) unless asked for more. Stay warm, sci-fi, and helpful.";
-    let content = call_minimax(&key, system, &history).await?;
+    let system = body.system.unwrap_or_else(|| "You are Omni the Presence — brief, human, factual. You are NOT the coding agent. Never output chain-of-thought, code fences, or meta narration. If code is needed, say you put it in the chat. 1–2 short sentences unless asked for detail.".into());
+    let max_tokens = body.max_tokens.unwrap_or(256);
+    let temperature = body.temperature.unwrap_or(0.55);
+    let content = call_minimax_opts(&key, &system, &history, max_tokens, temperature).await?;
     st.omni_history.write().push(("assistant".into(), content.clone()));
     // Optional mood tag via NVIDIA side model (fail open)
     let _ = tag_mood_best_effort(&st, &content).await;
@@ -225,22 +229,36 @@ fn bump_nvidia_rate(st: &AppState) -> Result<(), (StatusCode, String)> {
 }
 
 async fn call_minimax(key: &str, system: &str, messages: &[Msg]) -> Result<String, (StatusCode, String)> {
-    match call_openai_compatible(
+    call_minimax_opts(key, system, messages, 2048, 0.3).await
+}
+
+async fn call_minimax_opts(
+    key: &str,
+    system: &str,
+    messages: &[Msg],
+    max_tokens: u32,
+    temperature: f32,
+) -> Result<String, (StatusCode, String)> {
+    match call_openai_compatible_opts(
         "https://api.minimax.io/v1/text/chatcompletion_v2",
         key,
         "MiniMax-Text-01",
         system,
         messages,
+        max_tokens,
+        temperature,
     )
     .await
     {
         Ok(c) => Ok(c),
-        Err(e1) => call_openai_compatible(
+        Err(e1) => call_openai_compatible_opts(
             "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
             key,
             "MiniMax-Text-01",
             system,
             messages,
+            max_tokens,
+            temperature,
         )
         .await
         .map_err(|e2| (StatusCode::BAD_GATEWAY, format!("{e1} | fallback: {e2}"))),
@@ -286,6 +304,18 @@ async fn call_openai_compatible(
     system: &str,
     messages: &[Msg],
 ) -> Result<String, String> {
+    call_openai_compatible_opts(url, key, model, system, messages, 2048, 0.3).await
+}
+
+async fn call_openai_compatible_opts(
+    url: &str,
+    key: &str,
+    model: &str,
+    system: &str,
+    messages: &[Msg],
+    max_tokens: u32,
+    temperature: f32,
+) -> Result<String, String> {
     let mut msgs = vec![serde_json::json!({"role":"system","content": system})];
     for m in messages {
         msgs.push(serde_json::json!({"role": m.role, "content": m.content}));
@@ -293,8 +323,8 @@ async fn call_openai_compatible(
     let body = serde_json::json!({
         "model": model,
         "messages": msgs,
-        "temperature": 0.3,
-        "max_tokens": 2048,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     });
     let client = reqwest::Client::new();
     let resp = client

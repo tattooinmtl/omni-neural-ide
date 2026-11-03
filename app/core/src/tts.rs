@@ -4,17 +4,23 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 #[derive(Deserialize)]
-pub struct TtsIn { pub text: String }
+pub struct TtsIn {
+    pub text: String,
+    pub speed: Option<f32>,
+    pub voice_id: Option<String>,
+}
 
 pub async fn tts(State(st): State<Arc<AppState>>, Json(body): Json<TtsIn>) -> Result<axum::response::Response, (StatusCode, String)> {
     let key = st.keys.read().minimax.clone().filter(|s| !s.is_empty())
         .ok_or((StatusCode::UNAUTHORIZED, "MiniMax key required for TTS".into()))?;
     // MiniMax TTS (speech-01) — returns binary audio when available
     let client = reqwest::Client::new();
+    let speed = body.speed.unwrap_or(1.0).clamp(0.5, 2.0);
+    let voice = body.voice_id.unwrap_or_else(|| "male-qn-qingse".into());
     let payload = serde_json::json!({
         "model": "speech-01-turbo",
         "text": body.text,
-        "voice_setting": { "voice_id": "male-qn-qingse", "speed": 1.0, "vol": 1.0, "pitch": 0 }
+        "voice_setting": { "voice_id": voice, "speed": speed, "vol": 1.0, "pitch": 0 }
     });
     let resp = client.post("https://api.minimax.io/v1/t2a_v2")
         .bearer_auth(&key)

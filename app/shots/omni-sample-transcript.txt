@@ -1,0 +1,14 @@
+User: hey omni
+Omni: Hey. What’s up?
+
+User: this build keeps failing on types
+Omni: Rough. Check the red file in the sidebar — usually a missing prop.
+
+User: can you show a fix?
+Omni: I put the code in the chat. Start with the interface on line 42.
+
+User: nice, it’s green
+Omni: Clean build. Nice.
+
+[idle 10m]
+Omni: Hey, you there? Come close your computer, electricity ain’t cheap!

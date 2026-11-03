@@ -310,3 +310,13 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 .settings-role h3{margin:0 0 4px;font-size:14px;color:#e8eef4;display:flex;gap:8px;align-items:center}
 .role-pill{font-size:10px;padding:2px 8px;border-radius:999px;background:#14304a;color:#7dd3fc;font-weight:600}
 .role-pill.side{background:#1a2838;color:#9ad}
+
+.settings-field.row{display:flex;align-items:center;gap:8px}
+.omni-group{border:1px solid #1e2e3e;border-radius:8px;margin:10px 0;background:#0a1218}
+.omni-group > summary{cursor:pointer;padding:10px 12px;color:#7dd3fc;font-weight:600;list-style:none}
+.omni-group > summary::-webkit-details-marker{display:none}
+.omni-group > summary::before{content:'▸ '; color:#00ff88}
+.omni-group[open] > summary::before{content:'▾ '}
+.omni-group-body{padding:4px 12px 14px;display:flex;flex-direction:column;gap:4px}
+.omni-group-body textarea{background:#061018;border:1px solid #1e2e3e;border-radius:6px;color:#e8eef4;padding:8px;font-size:12px;color-scheme:dark}
+.omni-group input[type=range]{width:100%;accent-color:#00ff88}

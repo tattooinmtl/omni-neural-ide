@@ -1,5 +1,9 @@
 import { api } from './api';
-import { CORE_MOODS, moodPortrait, nearestMood } from './moods';
+import { moodPortrait, nearestMood } from './moods';
+import { sanitizeForSpeech } from './speech';
+import { loadOmniConfig, personalitySystemPrompt, type OmniConfig } from './omni-config';
+import { scoreTrigger, fireLine, type ActivitySignals } from './rhythm';
+import type { JokeCategory } from './jokes';
 
 /** Omni the Presence — floating face + own chat prompt (separate from coding chat). */
 export class FloatingAssistant {
@@ -12,15 +16,23 @@ export class FloatingAssistant {
   faceA!: HTMLImageElement;
   faceB!: HTMLImageElement;
   usingA = true;
-  glow = 0;
-  mouthPhase = 0;
   volunteerEnabled = true;
   lastVolunteer = 0;
+  lastRhythmFire = 0;
+  cfg: OmniConfig = loadOmniConfig();
+  audioCtx: AudioContext | null = null;
+  // activity
+  keyTimes: number[] = [];
+  lastTypeAt = 0;
+  undoChurn = 0;
+  recentErrors = 0;
+  sessionStart = Date.now();
 
   static create(root: HTMLElement) {
     const a = new FloatingAssistant();
     a.root = root;
-    root.classList.remove('assistant-hidden');
+    a.cfg = loadOmniConfig();
+    root.classList.toggle('assistant-hidden', !a.cfg.show);
     root.innerHTML = `
       <div class="asst-bar" id="asst-drag"><span>Omni the Presence</span><button id="asst-close" type="button">✕</button></div>
       <div class="asst-face-wrap" id="asst-face-wrap">
@@ -47,8 +59,7 @@ export class FloatingAssistant {
     root.querySelector('#asst-close')?.addEventListener('click', () => a.hide());
     root.querySelector('#asst-omni-btn')?.addEventListener('click', () => a.togglePrompt());
     const input = root.querySelector('#omni-input') as HTMLTextAreaElement;
-    const sendBtn = root.querySelector('#omni-send') as HTMLButtonElement;
-    sendBtn.addEventListener('click', () => a.sendOmni());
+    root.querySelector('#omni-send')?.addEventListener('click', () => a.sendOmni());
     input.addEventListener('keydown', (e) => {
       if (e.isComposing || (e as any).keyCode === 229) return;
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -57,29 +68,88 @@ export class FloatingAssistant {
         a.sendOmni();
       }
     });
-    // Never let a parent form submit
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) e.preventDefault();
     });
     makeDraggable(root, root.querySelector('#asst-drag') as HTMLElement);
+    window.addEventListener('keydown', (e) => a.noteKey(e));
     const loop = () => {
       a.raf = requestAnimationFrame(loop);
       a.tick();
     };
     loop();
+    setInterval(() => a.rhythmTick(), 5000);
     return a;
+  }
+
+  reloadConfig() {
+    this.cfg = loadOmniConfig();
+    this.volunteerEnabled = this.cfg.volunteer;
+    this.root.classList.toggle('assistant-hidden', !this.cfg.show);
+  }
+
+  noteKey(e: KeyboardEvent) {
+    const now = Date.now();
+    this.lastTypeAt = now;
+    this.keyTimes.push(now);
+    this.keyTimes = this.keyTimes.filter((t) => now - t < 5000);
+    if (e.key === 'z' && (e.ctrlKey || e.metaKey)) this.undoChurn++;
+  }
+
+  noteError() { this.recentErrors++; setTimeout(() => { this.recentErrors = Math.max(0, this.recentErrors - 1); }, 120000); }
+  noteBuild(ok: boolean) { void this.onSignal({ buildPassed: ok, buildFailed: !ok }); }
+  noteCommit() { void this.onSignal({ gitCommit: true }); }
+
+  async onSignal(partial: Partial<ActivitySignals>) {
+    const now = Date.now();
+    const typingRate = this.keyTimes.length / 5;
+    let cpuPct = 0, idleSec = 0, onBattery = false;
+    try {
+      const m = await api.activity();
+      cpuPct = m.cpuPct ?? 0;
+      idleSec = m.idleSec ?? 0;
+      onBattery = !!m.onBattery;
+    } catch { /* offline */ }
+    const sig: ActivitySignals = {
+      now,
+      typingRate,
+      lastTypeAt: this.lastTypeAt,
+      editRate: typingRate,
+      undoChurn: this.undoChurn,
+      recentErrors: this.recentErrors,
+      buildFailed: false,
+      buildPassed: false,
+      gitCommit: false,
+      sessionMin: (now - this.sessionStart) / 60000,
+      cpuPct,
+      idleSec,
+      onBattery,
+      ...partial,
+    };
+    const hit = scoreTrigger(sig, this.cfg.rhythm, this.lastRhythmFire);
+    if (hit.action === 'none') return;
+    const line = fireLine(hit.action as JokeCategory);
+    if (!line) return;
+    this.lastRhythmFire = now;
+    if (hit.action === 'cheer_ups') this.setMood('supportive');
+    else if (hit.action === 'congrats') this.setMood('joyful');
+    else if (hit.action === 'idle_callouts') this.setMood('curious');
+    else if (hit.action === 'break_reminders') this.setMood('calm');
+    else this.setMood('playful');
+    this.speak(line);
+    if (this.promptOpen) this.appendLog('omni', line);
+  }
+
+  async rhythmTick() {
+    if (!this.cfg.volunteer) return;
+    await this.onSignal({});
   }
 
   togglePrompt() {
     this.promptOpen = !this.promptOpen;
-    const box = this.root.querySelector('#asst-prompt');
-    box?.classList.toggle('hidden', !this.promptOpen);
-    if (this.promptOpen) {
-      (this.root.querySelector('#omni-input') as HTMLTextAreaElement)?.focus();
-      this.root.classList.add('prompt-open');
-    } else {
-      this.root.classList.remove('prompt-open');
-    }
+    this.root.querySelector('#asst-prompt')?.classList.toggle('hidden', !this.promptOpen);
+    this.root.classList.toggle('prompt-open', this.promptOpen);
+    if (this.promptOpen) (this.root.querySelector('#omni-input') as HTMLTextAreaElement)?.focus();
   }
 
   async sendOmni() {
@@ -90,12 +160,18 @@ export class FloatingAssistant {
     this.appendLog('you', text);
     this.setStatus('Thinking…');
     try {
-      const r = await api.omniChat(text);
-      this.appendLog('omni', r.content);
-      this.speak(r.content);
-      // naive mood from reply length/punctuation
-      if (/!/.test(r.content)) this.setMood('joyful');
-      else if (/\?/.test(r.content)) this.setMood('curious');
+      const r = await api.omniChat(text, {
+        system: personalitySystemPrompt(this.cfg),
+        max_tokens: this.cfg.maxTokens,
+        temperature: this.cfg.temperature,
+        timeout_ms: this.cfg.timeoutMs,
+      });
+      const clean = sanitizeForSpeech(r.content);
+      // Bubble shows sanitized display — never raw CoT/code
+      this.appendLog('omni', clean.display || clean.speak);
+      await this.speak(clean.speak);
+      if (/!/.test(clean.speak)) this.setMood('joyful');
+      else if (/\?/.test(clean.speak)) this.setMood('curious');
       else this.setMood('playful');
     } catch (e: any) {
       this.appendLog('omni', e.message || 'Could not reach Omni');
@@ -117,65 +193,78 @@ export class FloatingAssistant {
   tick() {
     const t = (performance.now() - this.t0) / 1000;
     const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement;
-    if (wrap) {
-      const idle = Math.sin(t * 0.7) * 1.2;
-      wrap.style.transform = `translateY(${idle}px)`;
-    }
+    if (wrap) wrap.style.transform = `translateY(${Math.sin(t * 0.7) * 1.2}px)`;
     const glow = this.root.querySelector('.asst-glow') as HTMLElement;
-    if (glow) {
-      const pulse = 0.35 + Math.sin(t * 1.6) * 0.12 + (this.talking ? 0.25 : 0);
-      glow.style.opacity = String(pulse);
-    }
+    if (glow) glow.style.opacity = String(0.35 + Math.sin(t * 1.6) * 0.12 + (this.talking ? 0.25 : 0));
     const mouth = this.root.querySelector('#asst-mouth') as HTMLElement;
     if (mouth) {
       if (this.talking) {
-        const open = 0.15 + Math.abs(Math.sin(t * 14)) * 0.55;
-        mouth.style.transform = `scaleY(${open})`;
+        mouth.style.transform = `scaleY(${0.15 + Math.abs(Math.sin(t * 14)) * 0.55})`;
         mouth.style.opacity = '0.55';
       } else {
         mouth.style.transform = 'scaleY(0.12)';
         mouth.style.opacity = '0';
       }
     }
-    // blink: briefly dim face
     if (Math.sin(t * 2.05) > 0.992) {
-      this.faceA.style.filter = this.usingA ? 'brightness(0.55)' : this.faceA.style.filter;
-      this.faceB.style.filter = !this.usingA ? 'brightness(0.55)' : this.faceB.style.filter;
+      this.faceA.style.filter = this.usingA ? 'brightness(0.55)' : '';
+      this.faceB.style.filter = !this.usingA ? 'brightness(0.55)' : '';
     } else {
       this.faceA.style.filter = '';
       this.faceB.style.filter = '';
     }
   }
 
-  speak(text: string) {
+  async speak(text: string) {
+    const { speak } = sanitizeForSpeech(text);
+    if (!speak || !this.cfg.speak) {
+      this.setStatus(`Ready · ${this.mood}`);
+      return;
+    }
     this.talking = true;
     this.setStatus('Speaking…');
-    const ms = Math.min(8000, 900 + text.length * 40);
+    const approxMs = Math.min(10000, 700 + speak.length * (55 / Math.max(0.7, this.cfg.speechSpeed)));
+    try {
+      const ok = await this.speakTTS(speak);
+      if (!ok) await this.speakBrowser(speak);
+    } catch {
+      await this.speakBrowser(speak);
+    }
     window.setTimeout(() => {
       this.talking = false;
       this.setStatus(`Ready · ${this.mood}`);
-    }, ms);
-    this.speakTTS(text);
+    }, approxMs);
   }
 
-  async speakTTS(text: string) {
-    try {
-      const r = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!r.ok) return;
-      const buf = await r.arrayBuffer();
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const audio = await ctx.decodeAudioData(buf.slice(0));
-      const src = ctx.createBufferSource();
-      src.buffer = audio;
-      src.connect(ctx.destination);
-      src.start();
-    } catch {
-      /* TTS optional */
-    }
+  async speakTTS(text: string): Promise<boolean> {
+    const r = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, speed: this.cfg.speechSpeed, voice_id: this.cfg.voiceId }),
+    });
+    if (r.status === 204 || !r.ok) return false;
+    const buf = await r.arrayBuffer();
+    if (!buf.byteLength) return false;
+    this.audioCtx = this.audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audio = await this.audioCtx.decodeAudioData(buf.slice(0));
+    const src = this.audioCtx.createBufferSource();
+    src.buffer = audio;
+    src.playbackRate.value = this.cfg.speechSpeed;
+    src.connect(this.audioCtx.destination);
+    src.start();
+    return true;
+  }
+
+  speakBrowser(text: string): Promise<void> {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) { resolve(); return; }
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = Math.min(1.4, Math.max(0.7, this.cfg.speechSpeed));
+      u.onend = () => resolve();
+      u.onerror = () => resolve();
+      window.speechSynthesis.speak(u);
+    });
   }
 
   setMood(mood: string, instant = false) {
@@ -205,26 +294,27 @@ export class FloatingAssistant {
     if (el) el.textContent = s;
   }
 
-  show() { this.root.classList.remove('assistant-hidden'); }
+  show() { this.root.classList.remove('assistant-hidden'); this.cfg.show = true; }
   hide() { this.root.classList.add('assistant-hidden'); }
   greet() {
-    this.speak('Hey. Omni the Presence is online — poke the Omni button anytime.');
+    const line = 'Hey. Omni here — tap Omni anytime.';
+    void this.speak(line);
     this.setMood('joyful');
     setTimeout(() => this.setMood('neutral'), 2800);
   }
 
-  /** Occasional volunteer remark from coding context (rate-limited). */
   async maybeVolunteer(context: string) {
-    if (!this.volunteerEnabled) return;
+    if (!this.cfg.volunteer) return;
     const now = Date.now();
     if (now - this.lastVolunteer < 45000) return;
     this.lastVolunteer = now;
     try {
       const r = await api.omniVolunteer(context);
-      if (r.content?.trim()) {
+      const clean = sanitizeForSpeech(r.content || '');
+      if (clean.speak) {
         this.setMood('curious');
-        this.speak(r.content.trim());
-        if (this.promptOpen) this.appendLog('omni', r.content.trim());
+        await this.speak(clean.speak);
+        if (this.promptOpen) this.appendLog('omni', clean.display || clean.speak);
       }
     } catch { /* ignore */ }
   }

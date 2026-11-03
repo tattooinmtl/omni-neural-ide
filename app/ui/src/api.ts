@@ -49,8 +49,9 @@ export const api = {
   getKeys: () => req<any>('/api/keys'),
   setKeys: (body: Record<string, unknown>) =>
     req<{ ok: boolean }>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
-  omniChat: (message: string) =>
-    req<{ content: string; model: string }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message }) }),
+  omniChat: (message: string, opts?: { system?: string; max_tokens?: number; temperature?: number; timeout_ms?: number }) =>
+    req<{ content: string; model: string }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message, ...opts }) }),
+  activity: () => req<{ cpuPct: number; idleSec: number; onBattery: boolean; memPct: number }>('/api/activity'),
   omniVolunteer: (input: string) =>
     req<{ content: string; model: string }>('/api/omni/volunteer', { method: 'POST', body: JSON.stringify({ task: 'volunteer', input }) }),
   embed: (texts: string[]) =>

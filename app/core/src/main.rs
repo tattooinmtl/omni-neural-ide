@@ -4,6 +4,7 @@ mod guardrails;
 mod fsapi;
 mod ai;
 mod pool;
+mod activity;
 mod harness;
 mod state;
 mod tts;
@@ -169,6 +170,7 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/side", post(ai::side_task))
         .route("/api/slash", post(harness::slash))
         .route("/api/tts", post(tts::tts))
+        .route("/api/activity", get(activity::activity))
         .route("/api/harness/run", post(harness::run_loop))
         .route("/api/harness/drift-mode", post(harness::set_drift_mode))
         .with_state(state.clone());

@@ -425,6 +425,7 @@ async function boot() {
   });
   chat = new ChatPanel(document.getElementById('chat')!, mode);
   assistant = FloatingAssistant.create(document.getElementById('assistant-root')!);
+  (window as any).__omniReloadConfig = () => assistant.reloadConfig();
   (assistant as any).moods = MOODS;
   setTimeout(() => assistant.greet(), 500);
   // periodic presence remarks
