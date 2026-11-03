@@ -188,6 +188,20 @@ export class FloatingAssistant {
     if (this.promptOpen) (this.root.querySelector('#omni-input') as HTMLTextAreaElement)?.focus();
   }
 
+  /** Docked in the right column: always show chat log + prompt; seed a greeting in demo. */
+  setDocked(docked: boolean) {
+    this.root.classList.toggle('docked', docked);
+    if (docked) {
+      this.promptOpen = true;
+      this.root.querySelector('#asst-prompt')?.classList.remove('hidden');
+      this.root.classList.add('prompt-open');
+      const log = this.root.querySelector('#asst-prompt-log');
+      if (log && !log.childElementCount) {
+        this.appendLog('omni', "Hey — I'm Omni. Ask me anything, or say /update to refresh the app.");
+      }
+    }
+  }
+
   thinkingTimer = 0;
   ummIndex = 0;
   lipRaf = 0;

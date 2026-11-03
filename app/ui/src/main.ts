@@ -11,12 +11,8 @@ import { BrainView } from './brain';
 import { HarnessController } from './harness';
 import { MOODS, nearestMood } from './moods';
 import { SettingsView } from './settings';
-import {
-  bindMenubar, buildMenus, installGlobalMenuGuards, setMenuHandler, showContextMenu, type MenuItem,
-} from './menus';
-import {
-  loadLayout, saveLayout, resetLayout, showPanel, togglePanel, bottomVisible, type LayoutState, type PanelId,
-} from './layout';
+import { setMenuHandler, bindMenubar, showContextMenu, installGlobalMenuGuards, buildMenus, tabContextItems, explorerContextItems, editorContextItems, setMenuIcons, type MenuItem } from './menus';
+import { loadLayout, saveLayout, resetLayout, showPanel, togglePanel, sideDockVisible, bottomVisible, type LayoutState, type PanelId } from './layout';
 import { TerminalPanel, ConsolePanel } from './terminal';
 
 const params = new URLSearchParams(location.search);
@@ -128,7 +124,19 @@ function shell() {
     <div class="resizer-v" id="resize-chat"></div>
     <div class="chat" id="chat"></div>
     <div class="resizer-v" id="resize-presence"></div>
-    <div class="presence-col" id="presence-col"><div class="presence-host" id="presence-host"></div></div>
+    <div class="presence-col" id="presence-col">
+      <div class="presence-host" id="presence-host"></div>
+      <div class="side-dock" id="side-dock">
+        <div class="side-dock-tabs" id="side-dock-tabs">
+          <button type="button" data-stab="terminal" class="active">Terminal</button>
+          <button type="button" data-stab="console">Console</button>
+        </div>
+        <div class="side-dock-body">
+          <div class="side-pane active" id="side-pane-terminal"></div>
+          <div class="side-pane" id="side-pane-console"></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="resizer-h" id="resize-bottom"></div>
   <div class="bottom-dock" id="bottom-dock">
@@ -162,9 +170,9 @@ function shell() {
       <span class="item plain-only">3.11.4 64-bit</span>
     </div>
     <div class="right">
-      <span class="item plain-only">OMNI-CODE 1.3.0</span>
+      <span class="item plain-only">OMNI-CODE 1.3.1</span>
       <span class="badge plain-only">Insiders</span>
-      <span class="item ultra-only">OMNI 1.3.0</span>
+      <span class="item ultra-only">OMNI 1.3.1</span>
       <span class="item ultra-only">🔔</span>
       <span class="item ultra-only">↻</span>
       <span class="item ultra-only">▶</span>
@@ -502,6 +510,8 @@ function dockPresence() {
   host.appendChild(root);
   document.body.classList.add('presence-docked');
   root.classList.remove('assistant-hidden', 'assistant-tucked');
+  // Always show Omni chat + prompt when docked (fills column with Terminal below)
+  (assistant as any)?.setDocked?.(true);
 }
 
 function applyLayout() {
@@ -528,6 +538,21 @@ function applyLayout() {
   if (resizePres) resizePres.style.display = s.visible.presence ? '' : 'none';
   if (resizeChat) resizeChat.style.display = s.visible.chat ? '' : 'none';
   if (resizeSide) resizeSide.style.display = s.visible.explorer ? '' : 'none';
+  // Side dock (Terminal/Console under Omni) — default placement
+  const sideDock = document.getElementById('side-dock');
+  const showSide = sideDockVisible(s) && s.visible.presence;
+  if (sideDock) {
+    sideDock.classList.toggle('hidden', !showSide);
+    document.querySelectorAll('#side-dock-tabs button').forEach((b) => {
+      const id = (b as HTMLElement).dataset.stab!;
+      b.classList.toggle('active', id === s.sideTab);
+      (b as HTMLElement).style.display = s.visible[id as PanelId] ? '' : 'none';
+    });
+    document.querySelectorAll('.side-pane').forEach((p) => {
+      p.classList.toggle('active', p.id === `side-pane-${s.sideTab}`);
+    });
+  }
+
   const showBottom = bottomVisible(s);
   if (bottom) {
     bottom.classList.toggle('visible', showBottom);
@@ -535,35 +560,40 @@ function applyLayout() {
   }
   const rb = document.getElementById('resize-bottom');
   if (rb) rb.style.display = showBottom ? '' : 'none';
-  // bottom tabs
   document.querySelectorAll('#bottom-tabs button').forEach((b) => {
     const id = (b as HTMLElement).dataset.btab!;
     b.classList.toggle('active', id === s.bottomTab);
-    (b as HTMLElement).style.display = s.visible[id as PanelId] || id === s.bottomTab ? '' : 'none';
+    const show = (id === 'problems' || id === 'output') ? !!s.visible[id as PanelId]
+      : (s.termPlacement === 'bottom' && !!s.visible[id as PanelId]);
+    (b as HTMLElement).style.display = show || id === s.bottomTab ? '' : 'none';
   });
   document.querySelectorAll('.bottom-pane').forEach((p) => {
     p.classList.toggle('active', p.id === `pane-${s.bottomTab}`);
   });
-  // outline/timeline
   document.querySelectorAll('[data-panel="outline"]').forEach((el) => {
     (el as HTMLElement).style.display = s.visible.outline ? '' : 'none';
   });
   document.querySelectorAll('[data-panel="timeline"]').forEach((el) => {
     (el as HTMLElement).style.display = s.visible.timeline ? '' : 'none';
   });
-  ensureBottomPanels();
+  ensureTermPanels();
   saveLayout(mode, s);
 }
 
-function ensureBottomPanels() {
-  if (layoutState.visible.terminal || layoutState.bottomTab === 'terminal') {
-    const host = document.getElementById('pane-terminal');
-    if (host && !terminal) terminal = new TerminalPanel(host, projectRoot || '');
-    else if (terminal && projectRoot) terminal.setCwd(projectRoot);
+function ensureTermPanels() {
+  const side = layoutState.termPlacement === 'side';
+  if (layoutState.visible.terminal) {
+    const host = document.getElementById(side ? 'side-pane-terminal' : 'pane-terminal');
+    if (host) {
+      if (!terminal || terminal.el !== host) terminal = new TerminalPanel(host, projectRoot || '');
+      else if (projectRoot) terminal.setCwd(projectRoot);
+    }
   }
-  if (layoutState.visible.console || layoutState.bottomTab === 'console') {
-    const host = document.getElementById('pane-console');
-    if (host && !consolePanel) consolePanel = new ConsolePanel(host);
+  if (layoutState.visible.console) {
+    const host = document.getElementById(side ? 'side-pane-console' : 'pane-console');
+    if (host) {
+      if (!consolePanel || (consolePanel as any).el !== host) consolePanel = new ConsolePanel(host);
+    }
   }
 }
 
@@ -667,29 +697,33 @@ async function handleMenu(id: string) {
     case 'edit.paste': document.execCommand('paste'); break;
     case 'edit.find': window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true })); break;
     case 'view.explorer': layoutState = togglePanel(layoutState, 'explorer'); applyLayout(); break;
-    case 'view.terminal': layoutState = showPanel(layoutState, 'terminal'); layoutState.bottomTab = 'terminal'; applyLayout(); terminal?.focus(); break;
-    case 'view.console': layoutState = showPanel(layoutState, 'console'); layoutState.bottomTab = 'console'; applyLayout(); break;
+    case 'view.terminal': layoutState = showPanel(layoutState, 'terminal'); layoutState.termPlacement = 'side'; layoutState.sideTab = 'terminal'; applyLayout(); terminal?.focus(); break;
+    case 'view.console': layoutState = showPanel(layoutState, 'console'); layoutState.termPlacement = 'side'; layoutState.sideTab = 'console'; applyLayout(); break;
     case 'view.presence': layoutState = togglePanel(layoutState, 'presence'); applyLayout(); break;
     case 'view.fullscreen': {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
       else await document.exitFullscreen?.();
       break;
     }
-    case 'term.new': layoutState = showPanel(layoutState, 'terminal'); layoutState.bottomTab = 'terminal'; applyLayout(); terminal?.focus(); break;
+    case 'term.new': layoutState = showPanel(layoutState, 'terminal'); layoutState.termPlacement = 'side'; layoutState.sideTab = 'terminal'; applyLayout(); terminal?.focus(); break;
     case 'term.clear': terminal?.clear(); break;
     case 'app.resetLayout': layoutState = resetLayout(mode); applyLayout(); break;
     case 'app.settings': SettingsView.open(document.body); break;
-    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.0`); break;
+    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.1`); break;
     case 'help.docs': window.open('https://github.com/tattooinmtl/omni-neural-ide', '_blank'); break;
     default:
       if (id.startsWith('panel.')) {
         const pid = id.slice(6) as PanelId;
         layoutState = showPanel(layoutState, pid);
-        if (pid === 'terminal' || pid === 'console' || pid === 'problems' || pid === 'output') {
-          layoutState.bottomTab = pid === 'console' ? 'console' : pid === 'problems' ? 'problems' : pid === 'output' ? 'output' : 'terminal';
+        if (pid === 'terminal' || pid === 'console') {
+          layoutState.termPlacement = 'side';
+          layoutState.sideTab = pid;
+        }
+        if (pid === 'problems' || pid === 'output') {
+          layoutState.bottomTab = pid;
         }
         applyLayout();
-        installMenus(); // refresh checks
+        installMenus();
       }
   }
 }
@@ -709,21 +743,8 @@ function installContextMenus() {
     e.preventDefault();
     const item = (e.target as HTMLElement).closest('.tree-item') as HTMLElement | null;
     const path = item?.dataset.path ? decodeURIComponent(item.dataset.path) : projectRoot;
-    const items: MenuItem[] = [
-      { type: 'item', id: 'ctx.newFile', label: 'New File' },
-      { type: 'item', id: 'ctx.newFolder', label: 'New Folder' },
-      { type: 'sep' },
-      { type: 'item', id: 'ctx.rename', label: 'Rename…', disabled: !item },
-      { type: 'item', id: 'ctx.delete', label: 'Delete', disabled: !item },
-      { type: 'sep' },
-      { type: 'item', id: 'ctx.cut', label: 'Cut', disabled: !item },
-      { type: 'item', id: 'ctx.copy', label: 'Copy', disabled: !item },
-      { type: 'item', id: 'ctx.paste', label: 'Paste', disabled: !clipboardPath || !path },
-      { type: 'item', id: 'ctx.duplicate', label: 'Duplicate', disabled: !item },
-      { type: 'sep' },
-      { type: 'item', id: 'ctx.copyPath', label: 'Copy Path', disabled: !path },
-      { type: 'item', id: 'ctx.reveal', label: 'Reveal', disabled: !path },
-    ];
+        setMenuIcons(mode === 'ultra');
+    const items: MenuItem[] = explorerContextItems(!!item, !!path, !!clipboardPath);
     setMenuHandler(async (id) => {
       try {
         if (id === 'ctx.newFile') await handleMenu('file.new');
@@ -756,7 +777,10 @@ function installContextMenus() {
           await api.copyPath(path, to);
           await refreshTree(to);
         } else if (id === 'ctx.copyPath' && path) await navigator.clipboard.writeText(path);
-        else if (id === 'ctx.reveal' && path) alert(path);
+        else if (id === 'ctx.copyRel' && path) {
+          const rel = projectRoot && path.startsWith(projectRoot) ? path.slice(projectRoot.length).replace(/^[/\\]+/, '') : path;
+          await navigator.clipboard.writeText(rel);
+        } else if (id === 'ctx.reveal' && path) alert(path);
       } catch (err: any) { alert(err.message || String(err)); }
     });
     showContextMenu(e.clientX, e.clientY, items);
@@ -766,30 +790,44 @@ function installContextMenus() {
     e.preventDefault();
     const tab = (e.target as HTMLElement).closest('.tab') as HTMLElement | null;
     const path = tab?.dataset.path ? decodeURIComponent(tab.dataset.path) : getActive()?.path;
-    const items: MenuItem[] = [
-      { type: 'item', id: 'tab.save', label: 'Save', disabled: !path },
-      { type: 'item', id: 'tab.rename', label: 'Rename…', disabled: !path },
-      { type: 'sep' },
-      { type: 'item', id: 'tab.close', label: 'Close', disabled: !path },
-      { type: 'item', id: 'tab.closeOthers', label: 'Close Others' },
-      { type: 'item', id: 'tab.closeAll', label: 'Close All' },
-      { type: 'sep' },
-      { type: 'item', id: 'tab.copyPath', label: 'Copy Path', disabled: !path },
-      { type: 'item', id: 'tab.delete', label: 'Delete File', disabled: !path },
-    ];
+    setMenuIcons(mode === 'ultra');
+    const items: MenuItem[] = tabContextItems(!!path);
     setMenuHandler(async (id) => {
       try {
         if (id === 'tab.save') await handleMenu('file.save');
+        else if (id === 'tab.saveAs') await handleMenu('file.saveAs');
         else if (id === 'tab.close') await handleMenu('file.close');
         else if (id === 'tab.closeOthers') await handleMenu('file.closeOthers');
         else if (id === 'tab.closeAll') await handleMenu('file.closeAll');
         else if (id === 'tab.copyPath' && path) await navigator.clipboard.writeText(path);
-        else if (id === 'tab.rename' && path) {
-          const base = path.split(/[/\\\\]/).pop()!;
+        else if (id === 'tab.copyRel' && path) {
+          const rel = projectRoot && path.startsWith(projectRoot) ? path.slice(projectRoot.length).replace(/^[/\\]+/, '') : path;
+          await navigator.clipboard.writeText(rel);
+        } else if (id === 'tab.reveal' && path) alert(`Path:\n${path}`);
+        else if (id === 'tab.cut' && path) clipboardPath = { path, cut: true };
+        else if (id === 'tab.copy' && path) clipboardPath = { path, cut: false };
+        else if (id === 'tab.paste' && clipboardPath) {
+          const src = clipboardPath.path;
+          const name = src.split(/[/\\]/).pop()!;
+          const destDir = (path || projectRoot || '').replace(/[/\\][^/\\]+$/, '');
+          const to = destDir.replace(/\\/g, '/') + '/' + name;
+          if (clipboardPath.cut) await api.renamePath(src, to);
+          else await api.copyPath(src, to);
+          clipboardPath = null;
+          await refreshTree(to);
+        } else if (id === 'tab.duplicate' && path) {
+          const to = path + '.copy';
+          await api.copyPath(path, to);
+          await refreshTree(to);
+          await onOpenFile({ name: to.split(/[/\\]/).pop()!, path: to, kind: 'file' });
+        } else if (id === 'tab.splitRight' || id === 'tab.moveRight' || id === 'tab.splitLeft' || id === 'tab.moveLeft') {
+          alert('Split / move editor groups are queued for a later update — tab stays open.');
+        } else if (id === 'tab.rename' && path) {
+          const base = path.split(/[/\\]/).pop()!;
           const name = prompt('Rename to', base);
           if (!name || name === base) return;
-          const to = path.replace(/[/\\\\][^/\\\\]+$/, '/' + name);
-          const content = getTabs().find(t => t.path === path)?.content ?? (await api.readFile(path)).content;
+          const to = path.replace(/[/\\][^/\\]+$/, '/' + name);
+          const content = getTabs().find(tt => tt.path === path)?.content ?? (await api.readFile(path)).content;
           await api.renamePath(path, to);
           closeTab(path);
           await api.writeFile(to, content);
@@ -808,14 +846,8 @@ function installContextMenus() {
 
   document.getElementById('monaco')?.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    showContextMenu(e.clientX, e.clientY, [
-      { type: 'item', id: 'edit.cut', label: 'Cut' },
-      { type: 'item', id: 'edit.copy', label: 'Copy' },
-      { type: 'item', id: 'edit.paste', label: 'Paste' },
-      { type: 'sep' },
-      { type: 'item', id: 'edit.find', label: 'Find' },
-      { type: 'item', id: 'go.line', label: 'Go to Line…' },
-    ]);
+    setMenuIcons(mode === 'ultra');
+    showContextMenu(e.clientX, e.clientY, editorContextItems());
     setMenuHandler(handleMenu);
   });
 
@@ -824,9 +856,10 @@ function installContextMenus() {
     if (!msg) return;
     e.preventDefault();
     const text = (msg.querySelector('.msg-body') as HTMLElement)?.innerText || '';
+    setMenuIcons(mode === 'ultra');
     showContextMenu(e.clientX, e.clientY, [
-      { type: 'item', id: 'chat.copy', label: 'Copy message' },
-      { type: 'item', id: 'chat.insert', label: 'Insert into editor' },
+      { type: 'item', id: 'chat.copy', label: 'Copy message', shortcut: 'Ctrl+C', icon: svg.menuCopy },
+      { type: 'item', id: 'chat.insert', label: 'Insert into editor', icon: svg.menuPaste },
     ]);
     setMenuHandler(async (id) => {
       if (id === 'chat.copy') await navigator.clipboard.writeText(text);
@@ -885,6 +918,16 @@ async function boot() {
   applyLayout();
   installMenus();
   installContextMenus();
+  document.getElementById('side-dock-tabs')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button[data-stab]') as HTMLElement | null;
+    if (!btn) return;
+    const tab = btn.dataset.stab as 'terminal' | 'console';
+    layoutState.visible[tab] = true;
+    layoutState.sideTab = tab;
+    layoutState.termPlacement = 'side';
+    applyLayout();
+    installMenus();
+  });
   dockPresence();
   // periodic presence remarks
   setInterval(() => {

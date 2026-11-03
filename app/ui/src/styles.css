@@ -416,3 +416,50 @@ body.mode-ultra .menubar button{color:#9ab4c8;font-weight:500;letter-spacing:.01
 body.mode-ultra .menubar button .mi-ico{color:var(--accent);opacity:1}
 body.mode-plain .menubar button .mi-ico{display:none} /* plain = simple text */
 body.mode-ultra .menubar button .mi-label-text{display:inline}
+
+/* ===== v1.3.1 presence column: face + chat + prompt + side Terminal ===== */
+body.presence-docked #assistant-root,
+.presence-col.docked #assistant-root{
+  position:relative!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
+  width:100%!important;height:auto!important;max-height:none!important;min-height:0!important;
+  border-radius:0!important;border:0!important;box-shadow:none!important;
+  display:flex!important;flex-direction:column;flex:0 0 auto;overflow:hidden;
+}
+body.presence-docked .asst-face-wrap{
+  width:100%;max-height:min(240px,32vh);aspect-ratio:1/1;flex:0 0 auto;
+}
+body.presence-docked .asst-prompt,
+body.presence-docked #assistant-root.docked .asst-prompt{
+  display:flex!important;flex:0 1 auto;min-height:0;padding-bottom:8px;
+}
+body.presence-docked .asst-prompt.hidden{display:flex!important}
+body.presence-docked .asst-prompt-log{
+  flex:1 1 auto;min-height:56px;max-height:140px;overflow:auto;
+}
+body.presence-docked .asst-omni-btn{flex-shrink:0}
+body.presence-docked .asst-status{flex-shrink:0}
+
+.presence-col{display:flex;flex-direction:column;min-height:0}
+.presence-col .presence-host{
+  flex:0 0 auto;position:relative;display:flex;flex-direction:column;min-height:0;
+}
+.side-dock{
+  flex:1 1 auto;min-height:160px;display:flex;flex-direction:column;
+  border-top:1px solid var(--border-soft);background:#01080f;
+}
+.side-dock.hidden{display:none}
+.side-dock-tabs{
+  height:28px;display:flex;align-items:center;gap:2px;padding:0 8px;
+  border-bottom:1px solid var(--border-soft);background:var(--bg-tabbar);flex-shrink:0;
+}
+.side-dock-tabs button{padding:0 10px;height:22px;border-radius:4px;font-size:12px;color:var(--fg-dim)}
+.side-dock-tabs button.active{color:var(--fg);background:rgba(255,255,255,.06)}
+body.mode-ultra .side-dock-tabs button.active{color:var(--accent)}
+.side-dock-body{flex:1;min-height:0;position:relative}
+.side-pane{position:absolute;inset:0;display:none;flex-direction:column}
+.side-pane.active{display:flex}
+
+.menu-item .mi-ico{width:14px;height:14px;display:inline-grid;place-items:center;color:var(--accent);flex-shrink:0}
+.menu-item .mi-ico svg{width:14px;height:14px}
+body.mode-plain .menu-item .mi-ico{display:none}
+.menu-dropdown,.ctx-menu{min-width:260px;max-width:360px}
