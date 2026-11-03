@@ -1,5 +1,5 @@
-from .app import db
+from . import db
 
-class Data(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120))
+def init_db(app):
+    with app.app_context():
+        db.create_all()

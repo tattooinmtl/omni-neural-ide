@@ -32,7 +32,7 @@ let timers: { id: number; at: number; text: string }[] = [];
 
 function shell() {
   const brand = mode === 'ultra'
-    ? `<span class="brand"><span>OMNI-CODE</span><span class="ultra">Ultra</span><span class="ultra-dot"></span></span>`
+    ? `<span class="brand"><span>OMNI-CODE</span><span class="ultra">Ultra</span><span class="ultra-dot"></span><span class="code-tag" style="color:var(--accent);margin-left:6px;font-weight:600">&lt;/&gt;</span></span>`
     : `<span class="brand">${svg.logo}<span>OMNI-CODE</span></span>`;
   return `
   <div class="titlebar">
@@ -111,6 +111,7 @@ function shell() {
   <div class="statusbar">
     <div class="left">
       <span class="item">⎇ main${mode === 'ultra' ? '*' : ''}</span>
+      <span class="item plain-only">↻ 0</span>
       <span class="item ultra-only">↻</span>
       <span class="item ultra-only">No issues</span>
       <span class="item plain-only">⊘ 0</span>
@@ -119,18 +120,21 @@ function shell() {
       <span class="item plain-only">Spaces: 4</span>
       <span class="item plain-only">UTF-8</span>
       <span class="item plain-only">LF</span>
-      <span class="item plain-only" id="status-lang">Plain Text</span>
+      <span class="item plain-only" id="status-lang">Python</span>
+      <span class="item plain-only">3.11.4 64-bit</span>
     </div>
     <div class="right">
       <span class="item plain-only">OMNI-CODE 1.0.0</span>
       <span class="badge plain-only">Insiders</span>
       <span class="item ultra-only">🔔</span>
       <span class="item ultra-only">↻</span>
+      <span class="item ultra-only">▶</span>
       <span class="item ultra-only">main*</span>
-      <span class="item ultra-only">0</span>
-      <span class="item ultra-only">0</span>
-      <span class="item ultra-only">0</span>
+      <span class="item ultra-only">⊘ 0</span>
+      <span class="item ultra-only">⚠ 0</span>
+      <span class="item ultra-only">ℹ 0</span>
       <span class="item plain-only">🔔</span>
+      <span class="item plain-only">▦</span>
     </div>
   </div>
   <div class="review-gate hidden" id="review-gate">
@@ -197,7 +201,13 @@ function paintBreadcrumbs() {
   const rootName = tree?.name;
   const idx = rootName ? parts.lastIndexOf(rootName) : -1;
   if (idx >= 0) parts = parts.slice(idx + 1);
-  bc.innerHTML = parts.map((p, i) => `<span class="${i === parts.length - 1 ? 'current' : 'crumb'}">${p}</span>`).join('<span class="sep">›</span>');
+  let crumbs = parts.map((p, i) => `<span class="${i === parts.length - 1 ? 'current' : 'crumb'}">${p}</span>`).join('<span class="sep">›</span>');
+  if (mode === 'plain' && t.name === 'app.py') {
+    crumbs += `<span class="sep">›</span><span class="crumb">...</span><span class="sep">›</span><span class="current">create_app()</span>`;
+  } else if (mode === 'ultra' && t.name === 'dashboard.tsx') {
+    crumbs += `<span class="sep">›</span><span class="current">DashboardPage</span>`;
+  }
+  bc.innerHTML = crumbs;
   const lang = t.language === 'typescript' && t.name.endsWith('tsx') ? 'TypeScript React'
     : t.language === 'python' ? 'Python' : t.language;
   const sl = document.getElementById('status-lang'); const ml = document.getElementById('meta-lang');
@@ -338,26 +348,52 @@ async function openProject(path: string) {
   const r = await api.openFolder(path);
   projectRoot = r.root;
   tree = r.tree;
-  expandAll(tree);
-  // keep __pycache__ collapsed like mock
-  for (const p of [...expanded]) if (p.includes('__pycache__')) expanded.delete(p);
+  expanded.clear();
+  // Mock-matching expand state
+  if (mode === 'plain') {
+    expandPaths(['backend', 'frontend']); // .vscode, __pycache__, api, models, services stay collapsed
+  } else {
+    expandPaths(['src', 'src/app', 'src/services', 'src/utils', 'src/components', 'src/styles']);
+    // .omni / .vscode stay collapsed unless we want their files visible — mock shows config under them collapsed often; expand parents only
+  }
   renderTree(document.getElementById('file-tree')!, tree, null, onOpenFile, expanded);
   const title = document.querySelector('.sidebar-header .project-title');
   if (title) title.textContent = mode==='plain' ? 'OMNI-CODE' : (tree.name || 'PROJECT').toUpperCase();
+  const label = document.querySelector('.sidebar-header .label');
+  if (label) label.textContent = mode === 'ultra' ? 'OMNI-APP' : 'EXPLORER';
+}
+
+function expandPaths(rels: string[]) {
+  if (!tree) return;
+  for (const rel of rels) {
+    const n = findByRel(tree, rel);
+    if (n) expanded.add(n.path);
+  }
+  // always expand root
+  expanded.add(tree.path);
 }
 
 async function bootDemo() {
   const folder = `${FIX_ROOT}/${mode === 'ultra' ? 'OMNI-APP' : 'OMNI-CODE'}`;
   await openProject(folder);
+  // Open in mock left-to-right order, then re-activate the first (active) tab
   const files = mode === 'plain'
-    ? ['backend/api/routes.py', 'backend/database.py', 'frontend/index.html', 'backend/app.py']
-    : ['src/services/api.ts', 'src/services/realtime.ts', 'src/app/layout.tsx', 'src/app/globals.css', 'src/app/dashboard.tsx'];
+    ? ['backend/app.py', 'backend/routes.py', 'backend/database.py', 'frontend/index.html']
+    : ['src/app/dashboard.tsx', 'src/services/api.ts', 'src/services/realtime.ts', 'src/app/layout.tsx', 'src/styles/globals.css'];
   for (const rel of files) {
     const n = findByRel(tree!, rel);
     if (n) await onOpenFile(n);
+    else console.warn('missing fixture file', rel);
+  }
+  // Re-activate primary tab so it is selected (and tree selection matches)
+  const primary = findByRel(tree!, files[0]);
+  if (primary) {
+    activate(primary.path);
+    paintTabs();
+    renderTree(document.getElementById('file-tree')!, tree, primary.path, onOpenFile, expanded);
   }
   // Chat fixture via real ChatPanel API
-  const transcriptUrl = `/fixtures-chat/${mode}.json`;
+  const transcriptUrl = `/fixtures-chat/${mode === 'plain' ? 'plain' : 'ultra'}.json`;
   try {
     const resp = await fetch(transcriptUrl);
     if (resp.ok) {

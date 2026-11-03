@@ -1,2 +1,2 @@
-def slugify(s: str) -> str:
-    return s.strip().lower().replace(" ", "-")
+def ok(data):
+    return {"ok": True, "data": data}

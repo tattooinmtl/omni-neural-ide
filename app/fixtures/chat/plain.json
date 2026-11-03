@@ -1,4 +1,12 @@
 [
-  {"role":"user","content":"Can you add error handling to the data endpoint and return a 404 if the resource is not found?","time":"10:24 AM"},
-  {"role":"assistant","content":"Sure — wrap the lookup and return a 404 when missing.\n```python\n@bp.get(\"/data/<id>\")\ndef get_data(id):\n    row = Data.query.get(id)\n    if row is None:\n        return {\"error\": \"not found\"}, 404\n    return row.to_dict()\n```","time":"10:24 AM"}
+  {
+    "role": "user",
+    "content": "Can you add error handling to the data endpoint and return a 404 if the resource is not found?",
+    "time": "10:24 AM"
+  },
+  {
+    "role": "assistant",
+    "content": "Sure. Here's an updated version of the data endpoint with error handling and a 404 response if the resource is not found.\n\n```python file=\"api/routes.py\"\n@bp.route('/data/<int:resource_id>')\ndef get_data(resource_id):\n    resource = Data.query.get(resource_id)\n    if resource is None:\n        abort(404, description=\"Resource not found\")\n    return jsonify(resource.to_dict())\n```\n\nLet me know if you need anything else!",
+    "time": "10:25 AM"
+  }
 ]

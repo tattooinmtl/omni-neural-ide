@@ -1,9 +1,8 @@
-export type Metrics = { ts: number; value: number }[];
-
-let cache: Metrics | null = null;
-
+const cache = new Map();
 export async function fetchMetrics() {
-  const fresh = fetch("/api/metrics").then(r => r.json());
-  if (cache) { fresh.then(v => { cache = v; }); return cache; }
-  cache = await fresh; return cache;
+  const key = 'metrics';
+  if (cache.has(key)) return cache.get(key);
+  const promise = fetch('/api/metrics').then(r => r.json());
+  cache.set(key, promise);
+  return promise;
 }

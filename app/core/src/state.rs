@@ -58,16 +58,18 @@ impl AppState {
         let tree = build_tree(&canon, 0, 6)?;
         *self.project_root.write() = Some(canon.clone());
         *self.tree.write() = Some(tree.clone());
-        // Ensure harness scaffold files if missing
-        for name in ["plan.md", "agents.md", "instructions.txt"] {
-            let f = canon.join(name);
-            if !f.exists() {
-                let stub = match name {
-                    "plan.md" => "# Plan\n\n_Awaiting first harness turn._\n",
-                    "agents.md" => "# Agents\n\nDefault: coding-expert\n",
-                    _ => "# Instructions\n\nProject instructions for OMNI workers.\n",
-                };
-                std::fs::write(f, stub)?;
+        // Ensure harness scaffold files if missing (skip fixture demos)
+        if !canon.join(".omni-fixture").exists() {
+            for name in ["plan.md", "agents.md", "instructions.txt"] {
+                let f = canon.join(name);
+                if !f.exists() {
+                    let stub = match name {
+                        "plan.md" => "# Plan\n\n_Awaiting first harness turn._\n",
+                        "agents.md" => "# Agents\n\nDefault: coding-expert\n",
+                        _ => "# Instructions\n\nProject instructions for OMNI workers.\n",
+                    };
+                    std::fs::write(f, stub)?;
+                }
             }
         }
         Ok(tree)

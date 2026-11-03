@@ -56,10 +56,27 @@ export function renderTree(
         } else onOpen(n);
       });
       host.appendChild(el);
-      if (isDir && open) walk(n.children, depth + 1);
+      if (isDir && open) walk(sortNodes(n.children), depth + 1);
     }
   };
-  walk(root.children, 0);
+  walk(sortNodes(root.children), 0);
+}
+
+function sortNodes(nodes: TreeNode[] | undefined): TreeNode[] | undefined {
+  if (!nodes) return nodes;
+  const dirOrder = ['.vscode', '.omni', 'backend', 'frontend', 'src', '__pycache__', 'api', 'models', 'services', 'app', 'components', 'services', 'styles', 'utils', 'assets', 'pages', 'charts', 'ui'];
+  const fileOrder = ['routes.py', 'database.py', 'utils.py', 'app.py', 'index.html', 'dashboard.tsx', 'layout.tsx', 'globals.css', 'api.ts', 'realtime.ts', 'cn.ts', 'format.ts', 'card.tsx', 'config.json', 'settings.json', '.gitignore', 'README.md', 'requirements.txt', 'package.json', 'tsconfig.json'];
+  const rank = (n: TreeNode, list: string[]) => {
+    const i = list.indexOf(n.name);
+    return i >= 0 ? i : 1000;
+  };
+  return [...nodes].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
+    const list = a.kind === 'dir' ? dirOrder : fileOrder;
+    const ra = rank(a, list), rb = rank(b, list);
+    if (ra !== rb) return ra - rb;
+    return a.name.localeCompare(b.name);
+  }).map(n => n.kind === 'dir' ? { ...n, children: sortNodes(n.children) } : n);
 }
 
 function escapeHtml(s: string) {

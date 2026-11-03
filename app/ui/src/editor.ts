@@ -30,22 +30,35 @@ let onChange: ((tabs: OpenTab[], active: string | null) => void) | null = null;
 let cursorCb: ((line: number, col: number) => void) | null = null;
 
 function themeForMode(mode: 'plain' | 'ultra') {
+  // Match mockup token colours: keywords purple/pink, strings orange/yellow
   const base = mode === 'ultra' ? {
-    bg: '#030f1b', gutter: '#030f1b', line: '#5f7388', sel: '#123048',
-    fg: '#e6eef6', kw: '#c792ea', str: '#ecc48d', num: '#f78c6c', comment: '#5c7a6a', type: '#7fdbca',
+    bg: '#010a15', gutter: '#010a15', line: '#5f7388', sel: '#123048',
+    fg: '#e6eef6', kw: '#e090e0', str: '#e6b35a', num: '#f0a070', comment: '#5c7a6a',
+    type: '#7fdbca', fn: '#82aaff', ident: '#e6eef6',
   } : {
-    bg: '#111a21', gutter: '#111a21', line: '#6a727a', sel: '#264f78',
-    fg: '#d4d7db', kw: '#c586c0', str: '#ce9178', num: '#b5cea8', comment: '#6a9955', type: '#4ec9b0',
+    bg: '#0f1620', gutter: '#0f1620', line: '#6a727a', sel: '#264f78',
+    fg: '#d4d7db', kw: '#e06cbf', str: '#d9a06a', num: '#b5cea8', comment: '#6a9955',
+    type: '#4ec9b0', fn: '#dcdcaa', ident: '#d4d7db',
   };
   monaco.editor.defineTheme('omni', {
     base: 'vs-dark',
-    inherit: true,
+    inherit: false,
     rules: [
+      { token: '', foreground: base.fg.replace('#','') },
       { token: 'comment', foreground: base.comment.replace('#','') },
       { token: 'keyword', foreground: base.kw.replace('#','') },
+      { token: 'keyword.flow', foreground: base.kw.replace('#','') },
       { token: 'string', foreground: base.str.replace('#','') },
+      { token: 'string.escape', foreground: base.str.replace('#','') },
       { token: 'number', foreground: base.num.replace('#','') },
       { token: 'type', foreground: base.type.replace('#','') },
+      { token: 'type.identifier', foreground: base.type.replace('#','') },
+      { token: 'identifier', foreground: base.ident.replace('#','') },
+      { token: 'delimiter', foreground: base.fg.replace('#','') },
+      { token: 'delimiter.parenthesis', foreground: base.fg.replace('#','') },
+      { token: 'delimiter.bracket', foreground: base.fg.replace('#','') },
+      { token: 'delimiter.square', foreground: base.fg.replace('#','') },
+      { token: 'operator', foreground: base.fg.replace('#','') },
     ],
     colors: {
       'editor.background': base.bg,
@@ -56,6 +69,8 @@ function themeForMode(mode: 'plain' | 'ultra') {
       'editorGutter.background': base.gutter,
       'editorCursor.foreground': mode === 'ultra' ? '#22d3ee' : '#ffffff',
       'editor.lineHighlightBackground': '#ffffff08',
+      'editorIndentGuide.background': '#ffffff10',
+      'editorIndentGuide.activeBackground': '#ffffff22',
     },
   });
   monaco.editor.setTheme('omni');
@@ -67,15 +82,18 @@ export function initEditor(host: HTMLElement, mode: 'plain' | 'ultra') {
     value: '',
     language: 'plaintext',
     theme: 'omni',
-    fontSize: 13,
+    fontSize: 15,
+    lineHeight: 22,
     fontFamily: 'Cascadia Code, Consolas, Courier New, monospace',
+    fontLigatures: false,
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
     automaticLayout: true,
     renderLineHighlight: 'line',
     cursorBlinking: 'smooth',
     tabSize: mode === 'ultra' ? 2 : 4,
-    padding: { top: 8 },
+    padding: { top: 6 },
+    lineNumbersMinChars: 3,
     scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
   });
   editor.onDidChangeModelContent(() => {

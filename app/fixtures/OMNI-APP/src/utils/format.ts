@@ -1,1 +1,3 @@
-export const fmt = (n: number) => n.toFixed(2);
+export function formatTs(ts: number) {
+  return new Date(ts).toLocaleString();
+}

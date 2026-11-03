@@ -1,3 +1,0 @@
-# Agents
-
-Default: coding-expert

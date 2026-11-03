@@ -1,4 +1,12 @@
 [
-  {"role":"user","content":"How can I optimize the metrics fetch in api.ts for better caching and reduce load time?","time":"10:42 AM"},
-  {"role":"assistant","content":"I can help with that. Here's an optimized stale-while-revalidate approach.\n```typescript\nlet cache: Metrics | null = null;\nexport async function fetchMetrics() {\n  const fresh = fetch(\"/api/metrics\").then(r => r.json());\n  if (cache) { fresh.then(v => { cache = v; }); return cache; }\n  cache = await fresh; return cache;\n}\n```","time":"10:42 AM"}
+  {
+    "role": "user",
+    "content": "How can I optimize the metrics fetch in api.ts for better caching and reduce load time?",
+    "time": "10:42 AM"
+  },
+  {
+    "role": "assistant",
+    "content": "I can help with that. Here's an optimized version using stale-while-revalidate caching and request deduplication.\n\n```typescript file=\"api.ts\"\nconst cache = new Map();\nexport async function fetchMetrics() {\n  const key = 'metrics';\n  if (cache.has(key)) {\n    return cache.get(key);\n  }\n  const promise = fetch('/api/metrics', {\n    method: 'GET',\n    headers: { 'Content-Type': 'application/json' },\n    next: { revalidate: 30 }\n  }).then(r => r.json());\n  cache.set(key, promise);\n  return promise;\n}\n```\n\nWould you like me to add background refresh or add error retry logic as well?",
+    "time": "10:43 AM"
+  }
 ]

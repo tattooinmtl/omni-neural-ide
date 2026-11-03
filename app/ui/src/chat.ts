@@ -60,10 +60,6 @@ export class ChatPanel {
         </button>
       </div>
       <div class="chat-messages" id="chat-msgs"></div>
-      <div class="thinking ${this.thinking && this.mode==='ultra' ? '' : 'hidden'}" id="thinking">
-        <span class="dots"><span></span><span></span><span></span></span>
-        Omni Ultra is thinking.
-      </div>
       <div class="chat-input-area">
         <div class="chat-input-row">
           <textarea id="chat-input" rows="2" placeholder="${this.mode === 'ultra' ? 'Ask anything about your code...' : 'Ask OMNI-CODE something...'}"></textarea>
@@ -71,9 +67,12 @@ export class ChatPanel {
         </div>
         <div class="chat-actions">
           <button class="clear-chat" id="clear-chat">Clear chat</button>
-          <span></span>
         </div>
         <div class="chat-disclaimer">OMNI-CODE can make mistakes. Verify important information.</div>
+      </div>
+      <div class="thinking ${this.thinking && this.mode==='ultra' ? '' : 'hidden'}" id="thinking">
+        <span class="dots"><span></span><span></span><span></span></span>
+        Omni Ultra is thinking
       </div>
     `;
     this.paintMessages();
@@ -85,12 +84,13 @@ export class ChatPanel {
     host.innerHTML = this.messages.filter(m => m.role !== 'system').map((m, i) => {
       const who = m.role === 'user' ? 'You' : (this.mode === 'ultra' ? 'OMNI' : 'OMNI-CODE');
       const cls = m.role === 'user' ? 'user' : 'ai';
-      const avatar = m.role === 'user' ? 'U' : '◎';
+      const avatar = m.role === 'user' ? 'U' : (this.mode === 'ultra' ? '◈' : '◎');
       const body = formatBody(m.content);
       const time = this.times[i] || '';
       return `<div class="msg ${cls}">
-        <div class="msg-head"><div class="avatar">${avatar}</div><strong>${who}</strong>${time?`<span class="msg-time">${time}</span>`:''}</div>
+        <div class="msg-head"><div class="avatar">${avatar}</div><strong>${who}</strong></div>
         <div class="msg-body">${body}</div>
+        ${time ? `<div class="msg-foot"><span class="msg-time">${time}</span></div>` : ''}
       </div>`;
     }).join('');
     host.scrollTop = host.scrollHeight;
@@ -154,9 +154,78 @@ export class ChatPanel {
 }
 
 function formatBody(content: string): string {
-  const escaped = content
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return escaped.replace(/```(\w+)?\n([\s\S]*?)```/g, (_m, _lang, code) => {
-    return `<div class="code-block"><button class="copy">Copy</button>${code.trimEnd()}</div>`;
+  const parts: string[] = [];
+  const re = /```(\w+)?([^\n]*)\n([\s\S]*?)```/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content))) {
+    parts.push(esc(content.slice(last, m.index)));
+    const meta = m[2] || '';
+    const fileMatch = /file\s*=\s*"([^"]+)"/.exec(meta);
+    const fname = fileMatch ? fileMatch[1] : '';
+    const code = highlightCode(m[3].replace(/\n$/, '').trimEnd());
+    parts.push(`<div class="code-card"><div class="code-card-head"><span>${esc(fname)}</span><button class="copy" title="Copy">${copyIcon()}</button></div><pre>${code}</pre></div>`);
+    last = m.index + m[0].length;
+  }
+  parts.push(esc(content.slice(last)));
+  return parts.join('');
+}
+
+function esc(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function copyIcon() {
+  return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10V3.5A1.5 1.5 0 0 1 4.5 2H10"/></svg>`;
+}
+
+function highlightCode(src: string): string {
+  const keys = /\b(from|import|def|class|return|if|else|elif|None|True|False|async|await|const|let|var|export|function|new|try|catch|finally|with|as|in|is|not|and|or)\b/g;
+  const lines = src.split('\n').map(line => {
+    // crude: strings first
+    let out = '';
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i];
+      if (ch === '"' || ch === "'" || ch === '`') {
+        let j = i + 1;
+        while (j < line.length && line[j] !== ch) { if (line[j] === '\\') j++; j++; }
+        j = Math.min(j + 1, line.length);
+        out += `<span class="tok-str">${esc(line.slice(i, j))}</span>`;
+        i = j;
+        continue;
+      }
+      if (ch === '#') {
+        out += `<span class="tok-cm">${esc(line.slice(i))}</span>`;
+        break;
+      }
+      // identifier / keyword / number
+      if (/[A-Za-z_]/.test(ch)) {
+        let j = i + 1;
+        while (j < line.length && /[A-Za-z0-9_]/.test(line[j])) j++;
+        const w = line.slice(i, j);
+        const next = line.slice(j).match(/^\s*\(/);
+        if (/^(from|import|def|class|return|if|else|elif|None|True|False|async|await|const|let|var|export|function|new|try|catch|finally|with|as|in|is|not|and|or)$/.test(w)) {
+          out += `<span class="tok-kw">${esc(w)}</span>`;
+        } else if (next) {
+          out += `<span class="tok-fn">${esc(w)}</span>`;
+        } else {
+          out += esc(w);
+        }
+        i = j;
+        continue;
+      }
+      if (/[0-9]/.test(ch)) {
+        let j = i + 1;
+        while (j < line.length && /[0-9.]/.test(line[j])) j++;
+        out += `<span class="tok-num">${esc(line.slice(i, j))}</span>`;
+        i = j;
+        continue;
+      }
+      out += esc(ch);
+      i++;
+    }
+    return out;
   });
+  return lines.join('\n');
 }
