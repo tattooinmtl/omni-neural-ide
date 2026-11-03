@@ -14,16 +14,83 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ApiErrorKind = 'nokey' | 'offline' | 'auth' | 'rate' | 'server' | 'unknown';
+
+export class ApiError extends Error {
+  kind: ApiErrorKind;
+  status: number;
+  detail: string;
+  constructor(kind: ApiErrorKind, human: string, status = 0, detail = '') {
+    super(human);
+    this.kind = kind;
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+/** Never expose HTML / huge bodies to UI. */
+export function humanizeApiFailure(status: number, body: string, path: string): ApiError {
+  const raw = (body || '').trim();
+  const looksHtml = /<!DOCTYPE|<html[\s>]|Unsupported method/i.test(raw);
+  const detail = looksHtml
+    ? `HTTP ${status} on ${path} (non-JSON/HTML body suppressed)`
+    : raw.slice(0, 400);
+  const lower = raw.toLowerCase();
+  if (status === 401 || /api key not set|unauthorized|minimax key/i.test(raw)) {
+    return new ApiError(
+      'nokey',
+      'I need a MiniMax key — Settings → Providers.',
+      status,
+      detail
+    );
+  }
+  if (status === 0 || status === 502 || status === 503 || status === 504) {
+    return new ApiError('offline', "Can't reach my brain right now.", status, detail);
+  }
+  if (status === 429 || /too many|rate/i.test(lower)) {
+    return new ApiError('rate', 'Easy — my brain is rate-limited. Try again in a bit.', status, detail);
+  }
+  if (status === 501 || looksHtml) {
+    return new ApiError('server', "Can't reach my brain right now.", status, detail);
+  }
+  if (status >= 500) {
+    return new ApiError('server', "Can't reach my brain right now.", status, detail);
+  }
+  return new ApiError('unknown', "Something went sideways — check logs if it keeps up.", status, detail || String(status));
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-  });
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    });
+  } catch (e: any) {
+    const err = new ApiError('offline', "Can't reach my brain right now.", 0, String(e?.message || e));
+    logClientError(path, err);
+    throw err;
+  }
   if (!r.ok) {
     const t = await r.text();
-    throw new Error(t || r.statusText);
+    const err = humanizeApiFailure(r.status, t, path);
+    logClientError(path, err);
+    throw err;
   }
   return r.json();
+}
+
+function logClientError(path: string, err: ApiError) {
+  try {
+    const line = `[${new Date().toISOString()}] ${path} status=${err.status} kind=${err.kind} ${err.detail || err.message}\n`;
+    // Best-effort: POST to core log sink if present; also console
+    console.warn(line);
+    void fetch(`${BASE}/api/client-log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, status: err.status, kind: err.kind, detail: err.detail, message: err.message }),
+    }).catch(() => {});
+  } catch { /* ignore */ }
 }
 
 export const api = {
@@ -56,7 +123,6 @@ export const api = {
     req<{ content: string; model: string }>('/api/omni/volunteer', { method: 'POST', body: JSON.stringify({ task: 'volunteer', input }) }),
   embed: (texts: string[]) =>
     req<{ vectors: number[][]; model: string; skipped: boolean }>('/api/embed', { method: 'POST', body: JSON.stringify({ texts }) }),
-
 };
 
 export function langFromPath(p: string): string {

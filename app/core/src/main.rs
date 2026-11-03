@@ -171,6 +171,7 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/slash", post(harness::slash))
         .route("/api/tts", post(tts::tts))
         .route("/api/activity", get(activity::activity))
+        .route("/api/client-log", post(fsapi::client_log))
         .route("/api/harness/run", post(harness::run_loop))
         .route("/api/harness/drift-mode", post(harness::set_drift_mode))
         .with_state(state.clone());

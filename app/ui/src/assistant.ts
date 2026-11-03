@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api, ApiError } from './api';
 import { moodPortrait, nearestMood } from './moods';
 import { sanitizeForSpeech } from './speech';
 import { loadOmniConfig, personalitySystemPrompt, type OmniConfig } from './omni-config';
@@ -174,9 +174,13 @@ export class FloatingAssistant {
       else if (/\?/.test(clean.speak)) this.setMood('curious');
       else this.setMood('playful');
     } catch (e: any) {
-      this.appendLog('omni', e.message || 'Could not reach Omni');
-      this.setMood('worried');
-      this.setStatus('Offline');
+      const human = e instanceof ApiError ? e.message : (e?.message && !/<!DOCTYPE|<html/i.test(e.message) ? e.message : "Can't reach my brain right now.");
+      const safe = human.replace(/<[^>]+>/g, ' ').slice(0, 160);
+      this.appendLog('omni', safe);
+      this.setMood(e instanceof ApiError && e.kind === 'nokey' ? 'worried' : 'sad');
+      this.setStatus(e instanceof ApiError && e.kind === 'nokey' ? 'Needs key' : 'Offline');
+      // don't speak HTML; short line only
+      void this.speak(safe);
     }
   }
 

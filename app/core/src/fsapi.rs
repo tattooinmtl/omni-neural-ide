@@ -256,3 +256,35 @@ pub async fn delete_path(State(st): S, Json(body): Json<DeleteIn>) -> Result<Jso
     }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
+
+
+#[derive(Deserialize)]
+pub struct ClientLogIn {
+    pub path: Option<String>,
+    pub status: Option<u16>,
+    pub kind: Option<String>,
+    pub detail: Option<String>,
+    pub message: Option<String>,
+}
+
+pub async fn client_log(State(st): S, Json(body): Json<ClientLogIn>) -> Json<serde_json::Value> {
+    let line = format!(
+        "{} client path={} status={} kind={} detail={} message={}\n",
+        chrono::Utc::now().to_rfc3339(),
+        body.path.unwrap_or_default(),
+        body.status.unwrap_or(0),
+        body.kind.unwrap_or_default(),
+        body.detail.unwrap_or_default().replace("\n", " "),
+        body.message.unwrap_or_default().replace("\n", " "),
+    );
+    let log_path = st.data_dir.join("logs").join("client.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+        use std::io::Write;
+        let _ = f.write_all(line.as_bytes());
+    }
+    tracing::warn!("{line}");
+    Json(serde_json::json!({ "ok": true }))
+}

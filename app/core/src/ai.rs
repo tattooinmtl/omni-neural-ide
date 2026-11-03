@@ -239,8 +239,16 @@ async fn call_minimax_opts(
     max_tokens: u32,
     temperature: f32,
 ) -> Result<String, (StatusCode, String)> {
+    let primary = std::env::var("OMNI_MINIMAX_BASE")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "https://api.minimax.io/v1/text/chatcompletion_v2".into());
+    let fallback = std::env::var("OMNI_MINIMAX_FALLBACK")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "https://api.minimaxi.chat/v1/text/chatcompletion_v2".into());
     match call_openai_compatible_opts(
-        "https://api.minimax.io/v1/text/chatcompletion_v2",
+        &primary,
         key,
         "MiniMax-Text-01",
         system,
@@ -251,17 +259,22 @@ async fn call_minimax_opts(
     .await
     {
         Ok(c) => Ok(c),
-        Err(e1) => call_openai_compatible_opts(
-            "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
-            key,
-            "MiniMax-Text-01",
-            system,
-            messages,
-            max_tokens,
-            temperature,
-        )
-        .await
-        .map_err(|e2| (StatusCode::BAD_GATEWAY, format!("{e1} | fallback: {e2}"))),
+        Err(e1) => {
+            if primary == fallback {
+                return Err((StatusCode::BAD_GATEWAY, e1));
+            }
+            call_openai_compatible_opts(
+                &fallback,
+                key,
+                "MiniMax-Text-01",
+                system,
+                messages,
+                max_tokens,
+                temperature,
+            )
+            .await
+            .map_err(|e2| (StatusCode::BAD_GATEWAY, format!("{e1} | fallback: {e2}")))
+        }
     }
 }
 

@@ -9,6 +9,10 @@ const META_PATTERNS = [
 export function sanitizeForSpeech(raw: string): { speak: string; hadCode: boolean; display: string } {
   let text = String(raw ?? '');
   let hadCode = false;
+  // Never speak/show raw HTML error pages
+  if (/<!DOCTYPE|<html[\s>]/i.test(text)) {
+    return { speak: "", hadCode: false, display: "" };
+  }
 
   // Strip fenced code blocks
   if (/```/.test(text)) {

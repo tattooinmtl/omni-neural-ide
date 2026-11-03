@@ -1,0 +1,5 @@
+Wine note: DwmSetWindowAttribute (dark caption / caption color) is a stub under Wine
+(see logs: dwmapi:DwmSetWindowAttribute ... stub). The X11 window title is "OMNI-CODE Gateway"
+(verified via xwininfo). Client area is dark; classic Windows white title bar / corner icon
+glyphs are not faithfully rendered by this Wine build. Resource dump still proves GROUP_ICON ID 1
+is embedded for real Windows.

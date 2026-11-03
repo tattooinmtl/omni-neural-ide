@@ -1,4 +1,4 @@
-import { api, type ChatMessage } from './api';
+import { api, ApiError, type ChatMessage } from './api';
 import { svg } from './icons';
 
 export type FixtureMsg = { role: 'user' | 'assistant'; content: string; time?: string };
@@ -162,10 +162,10 @@ export class ChatPanel {
       this.messages.push({ role: 'assistant', content: r.content });
       this.times.push('');
     } catch (e: any) {
-      this.messages.push({
-        role: 'assistant',
-        content: `Could not reach the model API (${e.message}). Set MiniMax / NVIDIA keys in Settings → Providers, then try again.`,
-      });
+      let msg = "Can't reach my brain right now.";
+      if (e instanceof ApiError) msg = e.message;
+      else if (e?.message && !/<!DOCTYPE|<html/i.test(String(e.message))) msg = String(e.message).slice(0, 200);
+      this.messages.push({ role: 'assistant', content: msg });
       this.times.push('');
     } finally {
       this.thinking = false;

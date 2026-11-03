@@ -35,6 +35,7 @@ export class SettingsView {
     const el = document.createElement('div');
     el.className = 'settings-overlay';
     host.appendChild(el);
+    document.getElementById('assistant-root')?.classList.add('assistant-tucked');
     const v = new SettingsView(el);
     v.render();
     return v;
@@ -46,6 +47,7 @@ export class SettingsView {
 
   close() {
     this.root.remove();
+    document.getElementById('assistant-root')?.classList.remove('assistant-tucked');
   }
 
   private async render() {
@@ -125,7 +127,7 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.1.0</p>
+          <p><strong>OMNI-CODE</strong> v1.1.1</p>
           <p class="settings-hint">Go Gateway → Rust core → native WebView2. No Electron.</p>
           <p class="settings-hint">Install: %USERPROFILE%\\.omni-neural-ide</p>`;
         break;
