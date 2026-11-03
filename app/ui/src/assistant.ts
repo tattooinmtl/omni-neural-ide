@@ -110,9 +110,10 @@ export class FloatingAssistant {
     const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement | null;
     wrap?.classList.toggle('digital-mode', digital);
     if (this.digitalFace) {
+      this.digitalFace.setAvatar(((this.cfg.avatar || 'female') as 'female' | 'male'));
       this.digitalFace.setOpts({
-        intensity: digital ? (this.cfg.effectIntensity ?? 0.85) : 0,
-        pixelSize: this.cfg.pixelSize ?? 3,
+        intensity: digital ? (this.cfg.effectIntensity ?? 0.9) : 0,
+        pixelSize: this.cfg.pixelSize ?? 2,
         eyeColorOverride: this.cfg.eyeColorOverride || null,
       });
       if (digital) this.digitalFace.start();

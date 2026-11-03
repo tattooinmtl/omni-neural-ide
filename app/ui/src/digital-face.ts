@@ -1,6 +1,7 @@
-/** Cyberpunk digital eyes (LED grid) + mouth waveform, masked to face panels. */
+/** Cyberpunk digital eyes (LED grid) + mouth waveform, soft-masked to face panels. */
 
 export type FaceState = 'idle' | 'talking' | 'thinking';
+export type AvatarId = 'female' | 'male';
 
 export type MoodPalette = {
   primary: [number, number, number];
@@ -38,16 +39,25 @@ export function moodPalette(mood: string, overrideRgb?: string | null): MoodPale
   return { ...base, primary: rgb, glow: rgb };
 }
 
-/** Panel layout in normalized face coords (0..1). Tuned to digital base portraits. */
-export const PANELS = {
-  leftEye: { cx: 0.355, cy: 0.415, rx: 0.105, ry: 0.072 },
-  rightEye: { cx: 0.645, cy: 0.415, rx: 0.105, ry: 0.072 },
-  mouth: { cx: 0.50, cy: 0.695, rx: 0.145, ry: 0.055 },
+type Panel = { cx: number; cy: number; rx: number; ry: number };
+
+/** Tight panels tuned to v1.2.2 digital bases (inside sockets/slit only). */
+export const PANELS_BY_AVATAR: Record<AvatarId, { leftEye: Panel; rightEye: Panel; mouth: Panel }> = {
+  female: {
+    leftEye: { cx: 0.355, cy: 0.398, rx: 0.086, ry: 0.050 },
+    rightEye: { cx: 0.645, cy: 0.398, rx: 0.086, ry: 0.050 },
+    mouth: { cx: 0.50, cy: 0.692, rx: 0.108, ry: 0.020 },
+  },
+  male: {
+    leftEye: { cx: 0.355, cy: 0.398, rx: 0.080, ry: 0.042 },
+    rightEye: { cx: 0.645, cy: 0.398, rx: 0.080, ry: 0.042 },
+    mouth: { cx: 0.50, cy: 0.682, rx: 0.108, ry: 0.019 },
+  },
 };
 
 export type DigitalFaceOpts = {
-  intensity: number; // 0..1
-  pixelSize: number; // css px of logical pixel
+  intensity: number;
+  pixelSize: number;
   eyeColorOverride?: string | null;
 };
 
@@ -55,9 +65,14 @@ export class DigitalFace {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   wrap: HTMLElement;
+  layer: HTMLCanvasElement;
+  lctx: CanvasRenderingContext2D;
+  mask: HTMLCanvasElement;
+  mctx: CanvasRenderingContext2D;
+  avatar: AvatarId = 'female';
   mood = 'neutral';
   state: FaceState = 'idle';
-  opts: DigitalFaceOpts = { intensity: 0.85, pixelSize: 3 };
+  opts: DigitalFaceOpts = { intensity: 0.9, pixelSize: 2 };
   analyser: AnalyserNode | null = null;
   synthLevel = 0;
   synthTarget = 0;
@@ -70,9 +85,10 @@ export class DigitalFace {
   lookY = 0;
   lookTargetX = 0;
   lookTargetY = 0;
-  blink = 0; // 0 open .. 1 closed
+  blink = 0;
   nextBlink = 0;
   private running = false;
+  private boot = 0; // 0..1 pixel turn-on reveal
 
   constructor(wrap: HTMLElement) {
     this.wrap = wrap;
@@ -85,6 +101,10 @@ export class DigitalFace {
     }
     this.canvas = c;
     this.ctx = c.getContext('2d', { alpha: true })!;
+    this.layer = document.createElement('canvas');
+    this.lctx = this.layer.getContext('2d', { alpha: true })!;
+    this.mask = document.createElement('canvas');
+    this.mctx = this.mask.getContext('2d', { alpha: true })!;
     this.resize();
     const ro = new ResizeObserver(() => this.resize());
     ro.observe(wrap);
@@ -105,11 +125,20 @@ export class DigitalFace {
       this.canvas.height = h;
       this.canvas.style.width = `${r.width}px`;
       this.canvas.style.height = `${r.height}px`;
+      this.layer.width = w;
+      this.layer.height = h;
+      this.mask.width = w;
+      this.mask.height = h;
     }
   }
 
   setOpts(o: Partial<DigitalFaceOpts>) {
     this.opts = { ...this.opts, ...o };
+  }
+
+  setAvatar(a: AvatarId) {
+    this.avatar = a === 'male' ? 'male' : 'female';
+    this.boot = 0;
   }
 
   setMood(mood: string) {
@@ -135,7 +164,6 @@ export class DigitalFace {
     }
   }
 
-  /** speechSynthesis fallback: nudge envelope */
   nudgeSynth(level: number) {
     this.synthTarget = Math.max(0, Math.min(1, level));
   }
@@ -157,6 +185,10 @@ export class DigitalFace {
     cancelAnimationFrame(this.raf);
   }
 
+  private panels() {
+    return PANELS_BY_AVATAR[this.avatar] || PANELS_BY_AVATAR.female;
+  }
+
   private audioLevels(): { amp: number; bands: number[] } {
     if (this.analyser) {
       this.analyser.getByteTimeDomainData(this.time);
@@ -168,59 +200,28 @@ export class DigitalFace {
       }
       const amp = Math.min(1, Math.sqrt(sum / this.time.length) * 4.2);
       const bands: number[] = [];
-      const n = 16;
+      const n = 24;
       const step = Math.floor(this.freq.length / n) || 1;
       for (let i = 0; i < n; i++) {
         let s = 0;
         for (let j = 0; j < step; j++) s += this.freq[i * step + j] || 0;
-        bands.push((s / step) / 255);
+        bands.push(s / step / 255);
       }
       return { amp, bands };
     }
-    // synthetic envelope
-    this.synthLevel += (this.synthTarget - this.synthLevel) * 0.25;
-    this.synthTarget *= 0.92;
+    this.synthLevel += (this.synthTarget - this.synthLevel) * 0.28;
+    this.synthTarget *= 0.9;
     const t = (performance.now() - this.t0) / 1000;
     const wiggle = Math.abs(Math.sin(t * 18)) * this.synthLevel;
-    const amp = Math.min(1, this.synthLevel * 0.85 + wiggle * 0.4);
-    const bands = Array.from({ length: 16 }, (_, i) => amp * (0.4 + 0.6 * Math.abs(Math.sin(t * 9 + i))));
+    const amp = Math.min(1, this.synthLevel * 0.9 + wiggle * 0.45);
+    const bands = Array.from({ length: 24 }, (_, i) => {
+      const mirror = 1 - Math.abs(i - 11.5) / 12;
+      return amp * (0.35 + 0.65 * Math.abs(Math.sin(t * 10 + i * 0.55))) * (0.55 + 0.45 * mirror);
+    });
     return { amp, bands };
   }
 
-  private draw() {
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    if (!w || !h) return;
-    ctx.clearRect(0, 0, w, h);
-    const intensity = this.opts.intensity;
-    if (intensity <= 0.01) return;
-
-    const now = performance.now();
-    const t = (now - this.t0) / 1000;
-    // look-around + blink
-    if (now > this.nextBlink) {
-      this.blink = 1;
-      this.nextBlink = now + 2200 + Math.random() * 3500;
-    }
-    this.blink = Math.max(0, this.blink - 0.12);
-    if (this.state === 'idle' && Math.random() < 0.004) {
-      this.lookTargetX = (Math.random() - 0.5) * 0.7;
-      this.lookTargetY = (Math.random() - 0.5) * 0.45;
-    }
-    this.lookX += (this.lookTargetX - this.lookX) * 0.06;
-    this.lookY += (this.lookTargetY - this.lookY) * 0.06;
-
-    const { amp, bands } = this.audioLevels();
-    const pal = moodPalette(this.mood, this.opts.eyeColorOverride);
-    const px = Math.max(2, Math.round(this.opts.pixelSize * (w / 320)));
-
-    this.drawEye(PANELS.leftEye, t, pal, px, amp, -1);
-    this.drawEye(PANELS.rightEye, t, pal, px, amp, 1);
-    this.drawMouth(t, pal, px, amp, bands);
-  }
-
-  private panelRect(p: { cx: number; cy: number; rx: number; ry: number }) {
+  private panelRect(p: Panel) {
     const w = this.canvas.width;
     const h = this.canvas.height;
     return {
@@ -235,51 +236,117 @@ export class DigitalFace {
     };
   }
 
-  private withEllipseClip(p: { cx: number; cy: number; rx: number; ry: number }, fn: () => void) {
-    const ctx = this.ctx;
+  /** Soft almond/lens alpha mask via scaled radial gradient (works for flat ellipses). */
+  private buildSoftMask(p: Panel, feather = 0.18) {
+    const m = this.mctx;
     const r = this.panelRect(p);
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(r.cx, r.cy, r.rx, r.ry, 0, 0, Math.PI * 2);
-    ctx.clip();
-    fn();
-    // soft inner glow ring
-    ctx.strokeStyle = `rgba(0,0,0,0.55)`;
-    ctx.lineWidth = Math.max(1, r.rx * 0.04);
-    ctx.beginPath();
-    ctx.ellipse(r.cx, r.cy, r.rx * 0.98, r.ry * 0.98, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    m.clearRect(0, 0, this.mask.width, this.mask.height);
+    m.save();
+    // Normalize ellipse to a unit circle so feathering is even on both axes
+    m.translate(r.cx, r.cy);
+    m.scale(Math.max(1, r.rx), Math.max(1, r.ry));
+    const inner = Math.max(0.05, 1 - feather);
+    const g = m.createRadialGradient(0, 0, inner, 0, 0, 1);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.78, 'rgba(255,255,255,0.98)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    m.fillStyle = g;
+    m.beginPath();
+    m.arc(0, 0, 1, 0, Math.PI * 2);
+    m.fill();
+    m.restore();
   }
 
-  private drawEye(
-    panel: { cx: number; cy: number; rx: number; ry: number },
-    t: number,
-    pal: MoodPalette,
-    px: number,
-    amp: number,
-    side: number,
-  ) {
-    const ctx = this.ctx;
-    const r = this.panelRect(panel);
-    const inten = this.opts.intensity;
-    this.withEllipseClip(panel, () => {
-      // dark panel fill
-      ctx.fillStyle = '#05080c';
-      ctx.fillRect(r.x, r.y, r.w, r.h);
+  private withSoftPanel(p: Panel, feather: number, draw: (ctx: CanvasRenderingContext2D, r: ReturnType<DigitalFace['panelRect']>) => void) {
+    const r = this.panelRect(p);
+    const l = this.lctx;
+    l.clearRect(0, 0, this.layer.width, this.layer.height);
+    draw(l, r);
+    // apply soft mask
+    this.buildSoftMask(p, feather);
+    l.globalCompositeOperation = 'destination-in';
+    l.drawImage(this.mask, 0, 0);
+    l.globalCompositeOperation = 'source-over';
+    // composite onto main (normal alpha — no screen-bleed rectangles)
+    this.ctx.drawImage(this.layer, 0, 0);
+  }
 
-      const cols = Math.max(6, Math.floor(r.w / px));
-      const rows = Math.max(4, Math.floor(r.h / px));
+  private draw() {
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    if (!w || !h) return;
+    ctx.clearRect(0, 0, w, h);
+    const intensity = this.opts.intensity;
+    if (intensity <= 0.01) return;
+
+    const now = performance.now();
+    const t = (now - this.t0) / 1000;
+    this.boot = Math.min(1, this.boot + 0.018);
+
+    if (now > this.nextBlink) {
+      this.blink = 1;
+      this.nextBlink = now + 2200 + Math.random() * 3500;
+    }
+    this.blink = Math.max(0, this.blink - 0.14);
+    if (this.state === 'idle' && Math.random() < 0.004) {
+      this.lookTargetX = (Math.random() - 0.5) * 0.65;
+      this.lookTargetY = (Math.random() - 0.5) * 0.4;
+    }
+    this.lookX += (this.lookTargetX - this.lookX) * 0.06;
+    this.lookY += (this.lookTargetY - this.lookY) * 0.06;
+
+    const { amp, bands } = this.audioLevels();
+    const pal = moodPalette(this.mood, this.opts.eyeColorOverride);
+    // finer grid: base pixelSize 2, scale gently with canvas
+    const px = Math.max(1.5, this.opts.pixelSize * (w / 420));
+    const panels = this.panels();
+
+    this.drawEye(panels.leftEye, t, pal, px, amp, -1);
+    this.drawEye(panels.rightEye, t, pal, px, amp, 1);
+    this.drawMouth(panels.mouth, t, pal, px, amp, bands);
+  }
+
+  private drawEye(panel: Panel, t: number, pal: MoodPalette, px: number, amp: number, side: number) {
+    const inten = this.opts.intensity;
+    this.withSoftPanel(panel, 0.30, (ctx, r) => {
+      // dark recessed panel (only inside soft mask)
+      ctx.fillStyle = '#020508';
+      ctx.beginPath();
+      ctx.ellipse(r.cx, r.cy, r.rx, r.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const cols = Math.max(10, Math.floor(r.w / px));
+      const rows = Math.max(6, Math.floor(r.h / px));
       const cellW = r.w / cols;
       const cellH = r.h / rows;
-      const pupilCx = cols * (0.5 + this.lookX * 0.18 * side);
-      const pupilCy = rows * (0.5 + this.lookY * 0.2);
+      const pupilCx = cols * (0.5 + this.lookX * 0.16 * side);
+      const pupilCy = rows * (0.5 + this.lookY * 0.18);
       const blinkRow = this.blink > 0 ? Math.floor(rows * (1 - this.blink)) : rows;
+
+      // inner bloom halo (masked)
+      const bloom = ctx.createRadialGradient(r.cx, r.cy, 0, r.cx, r.cy, r.rx);
+      const gcol = pal.glow;
+      bloom.addColorStop(0, `rgba(${gcol[0]},${gcol[1]},${gcol[2]},${0.28 * inten})`);
+      bloom.addColorStop(0.55, `rgba(${gcol[0]},${gcol[1]},${gcol[2]},${0.08 * inten})`);
+      bloom.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = bloom;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
 
       for (let y = 0; y < rows; y++) {
         if (y >= blinkRow) continue;
         for (let x = 0; x < cols; x++) {
-          // stay inside ellipse via clip already
+          // ellipse occupancy (extra safety inside soft mask)
+          const nx = (x + 0.5) / cols * 2 - 1;
+          const ny = (y + 0.5) / rows * 2 - 1;
+          if (nx * nx + ny * ny > 1.02) continue;
+
+          // staggered pixel turn-on wave
+          const reveal = this.boot * 1.35;
+          const gate = (x / cols) * 0.55 + (y / rows) * 0.45;
+          if (gate > reveal) continue;
+          const turn = Math.min(1, (reveal - gate) * 4);
+
           const dx = x + 0.5 - pupilCx;
           const dy = y + 0.5 - pupilCy;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -287,139 +354,140 @@ export class DigitalFace {
           const pat = pal.pattern;
           if (this.state === 'thinking' || pat === 'spinner') {
             const ang = Math.atan2(dy, dx);
-            const spin = (t * 3 + ang) % (Math.PI * 2);
-            on = spin < 1.2 && dist < cols * 0.42 ? 1 : dist < cols * 0.12 ? 0.9 : 0.08;
+            const spin = ((t * 3.2 + ang) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+            on = spin < 1.1 && dist < cols * 0.4 ? 1 : dist < cols * 0.11 ? 0.95 : 0.06 + 0.06 * Math.sin(t * 2 + x);
           } else if (pat === 'scan') {
-            const scan = ((t * 2.2) % 1) * rows;
-            on = Math.abs(y - scan) < 1.2 ? 1 : dist < cols * 0.18 ? 0.85 : 0.12;
+            const scan = ((t * 2.4) % 1) * rows;
+            on = Math.abs(y - scan) < 1.1 ? 1 : dist < cols * 0.16 ? 0.9 : 0.1;
           } else if (pat === 'flash') {
-            on = (Math.sin(t * 20) > 0 ? 1 : 0.15) * (dist < cols * 0.45 ? 1 : 0.2);
+            on = (Math.sin(t * 22) > 0 ? 1 : 0.12) * (dist < cols * 0.42 ? 1 : 0.15);
           } else if (pat === 'pulse') {
-            on = dist < cols * (0.15 + 0.1 * Math.abs(Math.sin(t * 5))) ? 1 : 0.1 + 0.1 * Math.sin(t * 8 + x);
+            on = dist < cols * (0.14 + 0.1 * Math.abs(Math.sin(t * 5))) ? 1 : 0.08 + 0.1 * Math.sin(t * 8 + x * 0.4);
           } else if (pat === 'dim') {
-            on = dist < cols * 0.14 ? 0.55 : 0.05 + 0.05 * Math.sin(t + x * 0.3);
+            on = dist < cols * 0.13 ? 0.6 : 0.04 + 0.05 * Math.sin(t + x * 0.3);
           } else if (pat === 'waves') {
-            on = 0.15 + 0.85 * Math.max(0, Math.sin(t * 3 + x * 0.45 + y * 0.3));
-            if (dist < cols * 0.12) on = 1;
+            on = 0.12 + 0.88 * Math.max(0, Math.sin(t * 3.2 + x * 0.5 + y * 0.35));
+            if (dist < cols * 0.11) on = 1;
           } else {
-            // shimmer + pupil
-            on = dist < cols * 0.14 ? 1 : 0.08 + 0.25 * (0.5 + 0.5 * Math.sin(t * 2 + x * 0.5 + y * 0.4));
-            if (dist < cols * 0.28) on = Math.max(on, 0.45);
+            on = dist < cols * 0.13 ? 1 : 0.06 + 0.28 * (0.5 + 0.5 * Math.sin(t * 2.2 + x * 0.55 + y * 0.4));
+            if (dist < cols * 0.26) on = Math.max(on, 0.5);
           }
-          if (this.state === 'talking') on = Math.max(on, amp * 0.35);
-          on *= inten;
-          if (on < 0.05) continue;
-          const mix = dist < cols * 0.16 ? pal.secondary : pal.primary;
-          const g = pal.glow;
+          if (this.state === 'talking') on = Math.max(on, amp * 0.3);
+          on *= inten * turn;
+          if (on < 0.04) continue;
+          const mix = dist < cols * 0.14 ? pal.secondary : pal.primary;
           const a = Math.min(1, on);
+          const pad = Math.max(0.35, px * 0.1);
           ctx.fillStyle = `rgba(${mix[0]},${mix[1]},${mix[2]},${a})`;
-          const pad = Math.max(0.5, px * 0.12);
           ctx.fillRect(r.x + x * cellW + pad, r.y + y * cellH + pad, cellW - pad * 2, cellH - pad * 2);
-          // bloom speck
-          if (on > 0.7) {
-            ctx.fillStyle = `rgba(${g[0]},${g[1]},${g[2]},${0.15 * a * inten})`;
+          if (on > 0.65) {
+            const g = pal.glow;
+            ctx.fillStyle = `rgba(${g[0]},${g[1]},${g[2]},${0.22 * a * inten})`;
             ctx.fillRect(r.x + x * cellW, r.y + y * cellH, cellW, cellH);
           }
         }
       }
     });
-    // outer glow
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(r.cx, r.cy, r.rx * 0.2, r.cx, r.cy, r.rx * 1.35);
-    const glow = pal.glow;
-    g.addColorStop(0, `rgba(${glow[0]},${glow[1]},${glow[2]},${0.22 * inten})`);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse(r.cx, r.cy, r.rx * 1.25, r.ry * 1.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
   }
 
-  private drawMouth(t: number, pal: MoodPalette, px: number, amp: number, bands: number[]) {
-    const ctx = this.ctx;
-    const panel = PANELS.mouth;
-    const r = this.panelRect(panel);
+  private drawMouth(panel: Panel, t: number, pal: MoodPalette, px: number, amp: number, bands: number[]) {
     const inten = this.opts.intensity;
-    this.withEllipseClip(panel, () => {
-      ctx.fillStyle = '#04060a';
-      ctx.fillRect(r.x, r.y, r.w, r.h);
+    // flatter lens feather for mouth slit
+    this.withSoftPanel(panel, 0.28, (ctx, r) => {
+      ctx.fillStyle = '#010307';
+      ctx.beginPath();
+      ctx.ellipse(r.cx, r.cy, r.rx, r.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      const cols = Math.max(10, Math.floor(r.w / px));
+      const cols = Math.max(16, Math.floor(r.w / px));
       const rows = Math.max(5, Math.floor(r.h / px));
       const cellW = r.w / cols;
       const cellH = r.h / rows;
 
+      // subtle inner glow
+      const glow = pal.glow;
+      const gr = ctx.createRadialGradient(r.cx, r.cy, 0, r.cx, r.cy, r.rx);
+      const glowAmp = this.state === 'talking' ? Math.max(0.25, amp) : 0.2;
+      gr.addColorStop(0, `rgba(${glow[0]},${glow[1]},${glow[2]},${0.22 * inten * glowAmp})`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+
+      const edgeFade = (x: number) => {
+        const u = x / (cols - 1);
+        // fade toward mouth corners
+        return Math.pow(Math.sin(Math.PI * u), 1.15);
+      };
+
       if (this.state === 'thinking') {
-        // slow scanning bars
-        const scan = ((t * 0.7) % 1) * cols;
+        const scan = ((t * 0.75) % 1) * cols;
         for (let x = 0; x < cols; x++) {
+          const fade = edgeFade(x);
           for (let y = 0; y < rows; y++) {
+            const nx = (x + 0.5) / cols * 2 - 1;
+            const ny = (y + 0.5) / rows * 2 - 1;
+            if (nx * nx + ny * ny > 1) continue;
             const d = Math.abs(x - scan);
-            const on = d < 1.5 ? 0.9 : 0.08 + 0.05 * Math.sin(t + y);
-            if (on < 0.1) continue;
+            const on = (d < 1.6 ? 0.95 : 0.06 + 0.04 * Math.sin(t + y)) * fade;
+            if (on < 0.08) continue;
             const c = pal.primary;
             ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${on * inten})`;
-            ctx.fillRect(r.x + x * cellW + 0.5, r.y + y * cellH + 0.5, cellW - 1, cellH - 1);
+            ctx.fillRect(r.x + x * cellW + 0.3, r.y + y * cellH + 0.3, cellW - 0.6, cellH - 0.6);
           }
         }
         return;
       }
 
-      if (this.state === 'idle' || amp < 0.04) {
-        // faint breathing line
-        const mid = rows / 2;
-        const breath = 0.35 + 0.25 * Math.sin(t * 1.4);
+      if (this.state === 'idle' || amp < 0.045) {
+        const mid = (rows - 1) / 2;
+        const breath = 0.4 + 0.25 * Math.sin(t * 1.35);
         for (let x = 0; x < cols; x++) {
-          const wave = Math.sin(t * 1.2 + x * 0.35) * 0.4;
+          const fade = edgeFade(x);
+          const wave = Math.sin(t * 1.25 + x * 0.4) * 0.55;
           const y = mid + wave;
-          const yi = Math.floor(y);
+          const yi = Math.round(y);
+          if (yi < 0 || yi >= rows) continue;
+          const nx = (x + 0.5) / cols * 2 - 1;
+          const ny = (yi + 0.5) / rows * 2 - 1;
+          if (nx * nx + ny * ny > 1) continue;
           const c = pal.primary;
-          ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${0.35 * breath * inten})`;
-          ctx.fillRect(r.x + x * cellW + 0.4, r.y + yi * cellH + 0.4, cellW - 0.8, cellH - 0.8);
+          ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${0.4 * breath * fade * inten})`;
+          ctx.fillRect(r.x + x * cellW + 0.25, r.y + yi * cellH + 0.25, cellW - 0.5, cellH - 0.5);
         }
         return;
       }
 
-      // speaking: Siri-like multi-band waveform shaped as lip band
+      // speaking: symmetric vertical pixel columns (Siri-like), mouth-shaped
       for (let x = 0; x < cols; x++) {
-        const b = bands[Math.floor((x / cols) * bands.length)] || amp;
-        const height = Math.max(0.15, Math.min(0.95, b * 1.35 + amp * 0.35));
-        const openRows = Math.max(1, Math.floor(rows * height));
+        const fade = edgeFade(x);
+        // mirror bands for left/right symmetry around center
+        const bi = Math.floor((x / cols) * bands.length);
+        const bj = bands.length - 1 - bi;
+        const b = ((bands[bi] || 0) + (bands[bj] || 0)) * 0.5;
+        const height = Math.max(0.35, Math.min(0.98, b * 1.55 + amp * 0.5));
+        const openRows = Math.max(1, Math.round(rows * height * fade));
         const y0 = Math.floor((rows - openRows) / 2);
         for (let y = 0; y < rows; y++) {
+          const nx = (x + 0.5) / cols * 2 - 1;
+          const ny = (y + 0.5) / rows * 2 - 1;
+          if (nx * nx + ny * ny > 1) continue;
           const inBand = y >= y0 && y < y0 + openRows;
-          // particle scatter near crest
+          if (!inBand) continue;
           const crest = Math.abs(y - (y0 + openRows / 2));
-          let on = inBand ? 0.55 + 0.45 * (1 - crest / (openRows / 2 + 0.01)) : 0;
-          // particle flicker
-          if (inBand && Math.random() < 0.08 * amp) on = 1;
-          if (on < 0.08) continue;
-          const mix = crest < 1 ? pal.secondary : pal.primary;
-          const a = on * inten;
-          ctx.fillStyle = `rgba(${mix[0]},${mix[1]},${mix[2]},${a})`;
-          const pad = 0.4;
+          let on = 0.5 + 0.5 * (1 - crest / (openRows / 2 + 0.01));
+          on *= fade;
+          if (Math.random() < 0.06 * amp) on = 1;
+          if (on < 0.07) continue;
+          const mix = crest < 0.8 ? pal.secondary : pal.primary;
+          ctx.fillStyle = `rgba(${mix[0]},${mix[1]},${mix[2]},${on * inten})`;
+          const pad = 0.25;
           ctx.fillRect(r.x + x * cellW + pad, r.y + y * cellH + pad, cellW - pad * 2, cellH - pad * 2);
-          if (on > 0.75) {
-            const g = pal.glow;
-            ctx.fillStyle = `rgba(${g[0]},${g[1]},${g[2]},${0.2 * inten})`;
+          if (on > 0.7) {
+            ctx.fillStyle = `rgba(${glow[0]},${glow[1]},${glow[2]},${0.25 * inten})`;
             ctx.fillRect(r.x + x * cellW, r.y + y * cellH, cellW, cellH);
           }
         }
       }
     });
-    // bloom
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const glow = pal.glow;
-    const gr = ctx.createRadialGradient(r.cx, r.cy, 0, r.cx, r.cy, r.rx * 1.4);
-    gr.addColorStop(0, `rgba(${glow[0]},${glow[1]},${glow[2]},${0.18 * inten * Math.max(0.2, amp)})`);
-    gr.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.ellipse(r.cx, r.cy, r.rx * 1.3, r.ry * 1.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
   }
 }

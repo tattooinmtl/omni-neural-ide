@@ -125,7 +125,7 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.2.1</p>
+          <p><strong>OMNI-CODE</strong> v1.2.2</p>
           <p class="settings-hint">Go Gateway → Rust core → native WebView2. No Electron.</p>
           <p class="settings-hint">Install: %USERPROFILE%\.omni-neural-ide</p>
           <div class="settings-field" style="margin-top:12px">
@@ -181,7 +181,7 @@ export class SettingsView {
             <input type="range" id="omni-fx-intensity" min="0.2" max="1" step="0.05" value="${cfg.effectIntensity??0.85}"/>
           </label>
           <label class="settings-field">Pixel size
-            <input type="range" id="omni-pixel-size" min="2" max="8" step="1" value="${cfg.pixelSize??3}"/>
+            <input type="range" id="omni-pixel-size" min="1" max="6" step="1" value="${cfg.pixelSize??2}"/>
           </label>
           <label class="settings-field">Custom eye color (optional)
             <input type="color" id="omni-eye-color" value="${cfg.eyeColorOverride||'#50dcff'}"/>
