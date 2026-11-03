@@ -1,0 +1,15 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tower Defense</title>
+<style>body{margin:0;background:#111;color:#0f0;font-family:sans-serif}canvas{display:block;margin:20px auto;background:#222;border:2px solid #0f0}</style></head>
+<body><h1 style="text-align:center">HTML Tower Defense</h1><canvas id="c" width="640" height="480"></canvas>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+let gold=100,wave=1,towers=[],enemies=[];
+c.onclick=e=>{const r=c.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;if(gold>=50){towers.push({x:mx,y:my,r:80,cd:0});gold-=50;}};
+function spawn(){for(let i=0;i<3+wave;i++)enemies.push({x:-20-i*30,y:240,hp:30+wave*10,sp:1+wave*0.1});wave++;}
+setInterval(spawn,8000);spawn();
+function loop(){x.clearRect(0,0,640,480);x.fillStyle='#0f0';x.fillText('Gold '+gold+' Wave '+wave,10,20);
+towers.forEach(t=>{x.beginPath();x.arc(t.x,t.y,12,0,6.28);x.fill();t.cd--;
+enemies.forEach(e=>{const d=Math.hypot(e.x-t.x,e.y-t.y);if(d<t.r&&t.cd<=0){e.hp-=10;t.cd=20;}});});
+enemies=enemies.filter(e=>e.hp>0&&e.x<700);enemies.forEach(e=>{e.x+=e.sp;x.fillStyle='#f44';x.fillRect(e.x-8,e.y-8,16,16);});
+requestAnimationFrame(loop);}loop();
+</script></body></html>

@@ -323,3 +323,17 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 .omni-group input[type=range]{width:100%;accent-color:#00ff88}
 
 #assistant-root.assistant-tucked{opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .2s,transform .2s}
+
+/* v1.2.0 selectable Omni + Coding Agent */
+.asst-prompt-log,.asst-line,.asst-line-row,.msg-body,#omni-input,#chat-input{user-select:text!important;-webkit-user-select:text!important}
+.asst-line-row{display:flex;gap:4px;align-items:flex-start}
+.asst-line-row .asst-line{flex:1;min-width:0}
+.asst-copy,.msg-copy{flex-shrink:0;border:0;background:transparent;color:#7dd3fc;cursor:pointer;font-size:12px;padding:0 4px;opacity:.7}
+.asst-copy:hover,.msg-copy:hover{opacity:1}
+.msg-head{display:flex;align-items:center;gap:6px}
+.msg-head .msg-copy{margin-left:auto}
+.toast-update{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:3000;background:#0a1822;border:1px solid #00ff88;color:#cde;padding:10px 14px;border-radius:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 28px rgba(0,0,0,.45)}
+.toast-update button{background:#0c2a1c;border:1px solid #00ff88;color:#00ff88;border-radius:6px;padding:4px 10px;cursor:pointer}
+.avatar-pick{display:flex;gap:8px}
+.avatar-pick button{flex:1;padding:8px;border-radius:8px;border:1px solid #1e3a4a;background:#061018;color:#9ad;cursor:pointer}
+.avatar-pick button.active{border-color:#00ff88;color:#00ff88}

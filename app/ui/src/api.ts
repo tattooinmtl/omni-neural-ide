@@ -117,7 +117,12 @@ export const api = {
   setKeys: (body: Record<string, unknown>) =>
     req<{ ok: boolean }>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
   omniChat: (message: string, opts?: { system?: string; max_tokens?: number; temperature?: number; timeout_ms?: number }) =>
-    req<{ content: string; model: string }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message, ...opts }) }),
+    req<{ content: string; model: string; tools_used?: string[]; delegate?: any; update?: any }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message, ...opts }) }),
+  delegateToCodingAgent: (task: string) =>
+    req<{ task_id: string; status: string; message: string; coding_reply: string; files_written: string[] }>('/api/omni/delegate', { method: 'POST', body: JSON.stringify({ task, from: 'Omni' }) }),
+  updateCheck: () => req<{ current: string; latest?: string; available: boolean; asset?: string; notes?: string }>('/api/update/check'),
+  updateApply: (mode?: string, mock_stage?: string) =>
+    req<{ ok: boolean; message: string; plan_path?: string }>('/api/update/apply', { method: 'POST', body: JSON.stringify({ mode, mock_stage }) }),
   activity: () => req<{ cpuPct: number; idleSec: number; onBattery: boolean; memPct: number }>('/api/activity'),
   omniVolunteer: (input: string) =>
     req<{ content: string; model: string }>('/api/omni/volunteer', { method: 'POST', body: JSON.stringify({ task: 'volunteer', input }) }),

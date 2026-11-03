@@ -16,7 +16,7 @@ pub async fn tts(State(st): State<Arc<AppState>>, Json(body): Json<TtsIn>) -> Re
     // MiniMax TTS (speech-01) — returns binary audio when available
     let client = reqwest::Client::new();
     let speed = body.speed.unwrap_or(1.0).clamp(0.5, 2.0);
-    let voice = body.voice_id.unwrap_or_else(|| "male-qn-qingse".into());
+    let voice = body.voice_id.unwrap_or_else(|| "female-chengshu".into());
     let payload = serde_json::json!({
         "model": "speech-01-turbo",
         "text": body.text,

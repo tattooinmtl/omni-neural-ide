@@ -1,6 +1,5 @@
 import { api } from './api';
-import {
-  autoConfigureOmni,
+import { VOICE_IDS, autoConfigureOmni,
   defaultOmniConfig,
   deleteUserPreset,
   listUserPresets,
@@ -8,8 +7,7 @@ import {
   PERSONALITY_PRESETS,
   saveOmniConfig,
   saveUserPreset,
-  type OmniConfig,
-} from './omni-config';
+  type OmniConfig, } from './omni-config';
 import { poolStats } from './jokes';
 
 const CATEGORIES = [
@@ -127,9 +125,28 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.1.1</p>
+          <p><strong>OMNI-CODE</strong> v1.2.0</p>
           <p class="settings-hint">Go Gateway → Rust core → native WebView2. No Electron.</p>
-          <p class="settings-hint">Install: %USERPROFILE%\\.omni-neural-ide</p>`;
+          <p class="settings-hint">Install: %USERPROFILE%\.omni-neural-ide</p>
+          <div class="settings-field" style="margin-top:12px">
+            <button type="button" class="primary" id="btn-check-updates">Check for updates</button>
+            <p class="settings-hint" id="update-status">In-app updates — no setup.exe needed.</p>
+          </div>`;
+        page.querySelector('#btn-check-updates')?.addEventListener('click', async () => {
+          const stEl = page.querySelector('#update-status') as HTMLElement;
+          stEl.textContent = 'Checking…';
+          try {
+            const { api } = await import('./api');
+            const r = await api.updateCheck();
+            if (!r.available) { stEl.textContent = `You're on ${r.current}` + (r.latest ? ` (latest ${r.latest})` : ''); return; }
+            stEl.textContent = `Update ${r.latest} available.`;
+            if (confirm(`Update to ${r.latest}? App will restart.`)) {
+              const mode = new URLSearchParams(location.search).get('mode') || 'plain';
+              const a = await api.updateApply(mode);
+              stEl.textContent = a.message;
+            }
+          } catch (e: any) { stEl.textContent = e?.message || 'Check failed'; }
+        });
         break;
     }
   }
@@ -147,11 +164,23 @@ export class SettingsView {
       <p class="settings-hint">Separate from the coding chat. MiniMax voice &amp; brain; NVIDIA mood tags when available. Line pool: ${stats.total} phrases.</p>
 
       <details class="omni-group" open>
+        <summary>Avatar &amp; voice</summary>
+        <div class="omni-group-body">
+          <div class="avatar-pick">
+            <button type="button" id="avatar-female" class="${(cfg.avatar||'female')==='female'?'active':''}">Female</button>
+            <button type="button" id="avatar-male" class="${cfg.avatar==='male'?'active':''}">Male</button>
+          </div>
+          <p class="settings-hint">Switches face + voice together (MiniMax TTS; speechSynthesis fallback matches gender).</p>
+        </div>
+      </details>
+
+      <details class="omni-group" open>
         <summary>Presence</summary>
         <div class="omni-group-body">
           <label class="settings-field row"><input type="checkbox" id="omni-show" ${cfg.show?'checked':''}/> Show Omni window</label>
           <label class="settings-field row"><input type="checkbox" id="omni-speak" ${cfg.speak?'checked':''}/> Speak replies (TTS)</label>
           <label class="settings-field row"><input type="checkbox" id="omni-volunteer" ${cfg.volunteer?'checked':''}/> Occasional volunteer remarks</label>
+          <label class="settings-field row"><input type="checkbox" id="omni-autoupdate" ${cfg.autoCheckUpdates?'checked':''}/> Auto-check updates on start</label>
         </div>
       </details>
 
@@ -351,6 +380,19 @@ export class SettingsView {
       saveOmniConfig(defaultOmniConfig());
       this.paintOmniPresence(page);
     });
+
+    page.querySelector('#avatar-female')?.addEventListener('click', () => {
+      const cfg = loadOmniConfig(); cfg.avatar='female'; cfg.voiceId=VOICE_IDS.female; saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.(); this.paintPage('assistant');
+    });
+    page.querySelector('#avatar-male')?.addEventListener('click', () => {
+      const cfg = loadOmniConfig(); cfg.avatar='male'; cfg.voiceId=VOICE_IDS.male; saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.(); this.paintPage('assistant');
+    });
+    page.querySelector('#omni-autoupdate')?.addEventListener('change', (e) => {
+      const cfg = loadOmniConfig(); cfg.autoCheckUpdates=(e.target as HTMLInputElement).checked; saveOmniConfig(cfg);
+    });
+
   }
 
   private async paintProviders(page: Element) {

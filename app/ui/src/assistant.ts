@@ -1,5 +1,6 @@
 import { api, ApiError } from './api';
-import { moodPortrait, nearestMood } from './moods';
+import { moodPortrait, mouthFrame, nearestMood, type AvatarId } from './moods';
+import { VOICE_IDS } from './omni-config';
 import { sanitizeForSpeech } from './speech';
 import { loadOmniConfig, personalitySystemPrompt, type OmniConfig } from './omni-config';
 import { scoreTrigger, fireLine, type ActivitySignals } from './rhythm';
@@ -49,7 +50,7 @@ export class FloatingAssistant {
       <div class="asst-prompt hidden" id="asst-prompt">
         <div class="asst-prompt-log" id="asst-prompt-log"></div>
         <div class="asst-prompt-row">
-          <textarea id="omni-input" rows="2" placeholder="Talk to Omni…" autocomplete="off"></textarea>
+          <textarea id="omni-input" rows="2" placeholder="Talk to Omni…" autocomplete="off" spellcheck="true" style="user-select:text;-webkit-user-select:text"></textarea>
           <button type="button" class="asst-send" id="omni-send" title="Send" aria-label="Send">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 16V8M8 12l4-4 4 4"/></svg>
           </button>
@@ -59,7 +60,7 @@ export class FloatingAssistant {
     a.faceA = root.querySelector('#asst-face-a') as HTMLImageElement;
     a.faceB = root.querySelector('#asst-face-b') as HTMLImageElement;
     a.faceTalk = root.querySelector('#asst-face-talk') as HTMLImageElement;
-    a.faceTalk.src = '/omni-presence/talking.jpg';
+    a.faceTalk.src = mouthFrame(2, (a.cfg.avatar || 'female') as AvatarId);
     a.setMood('neutral', true);
     root.querySelector('#asst-close')?.addEventListener('click', () => a.hide());
     root.querySelector('#asst-omni-btn')?.addEventListener('click', () => a.togglePrompt());
@@ -91,6 +92,10 @@ export class FloatingAssistant {
     this.cfg = loadOmniConfig();
     this.volunteerEnabled = this.cfg.volunteer;
     this.root.classList.toggle('assistant-hidden', !this.cfg.show);
+    // Keep voice paired with avatar
+    if (this.cfg.avatar === 'male' && this.cfg.voiceId === VOICE_IDS.female) this.cfg.voiceId = VOICE_IDS.male;
+    if (this.cfg.avatar === 'female' && this.cfg.voiceId === VOICE_IDS.male) this.cfg.voiceId = VOICE_IDS.female;
+    this.setMood(this.mood || 'neutral', true);
   }
 
   noteKey(e: KeyboardEvent) {
@@ -157,13 +162,19 @@ export class FloatingAssistant {
     if (this.promptOpen) (this.root.querySelector('#omni-input') as HTMLTextAreaElement)?.focus();
   }
 
+  thinkingTimer = 0;
+  ummIndex = 0;
+  lipRaf = 0;
+  analyser: AnalyserNode | null = null;
+  lipSource: AudioBufferSourceNode | null = null;
+
   async sendOmni() {
     const input = this.root.querySelector('#omni-input') as HTMLTextAreaElement;
     const text = (input?.value || '').trim();
     if (!text) return;
     input.value = '';
     this.appendLog('you', text);
-    this.setStatus('Thinking…');
+    this.beginThinking();
     try {
       const r = await api.omniChat(text, {
         system: personalitySystemPrompt(this.cfg),
@@ -171,31 +182,70 @@ export class FloatingAssistant {
         temperature: this.cfg.temperature,
         timeout_ms: this.cfg.timeoutMs,
       });
+      this.endThinking();
+      if (r.delegate) {
+        (window as any).__codingChat?.injectFromOmni?.(r.delegate);
+      }
+      if (r.update?.ok) {
+        // updater helper relaunches — exit cleanly soon
+        window.setTimeout(() => { try { (window as any).__omniQuit?.(); } catch {} }, 800);
+      }
       const clean = sanitizeForSpeech(r.content);
-      // Bubble shows sanitized display — never raw CoT/code
-      this.appendLog('omni', clean.display || clean.speak);
-      await this.speak(clean.speak);
-      if (/!/.test(clean.speak)) this.setMood('joyful');
+      this.appendLog('omni', clean.display || clean.speak || r.content);
+      await this.speak(clean.speak || r.content);
+      if ((r.tools_used || []).includes('delegate_to_coding_agent')) this.setMood('joyful');
+      else if (/!/.test(clean.speak)) this.setMood('joyful');
       else if (/\?/.test(clean.speak)) this.setMood('curious');
       else this.setMood('playful');
     } catch (e: any) {
+      this.endThinking();
       const human = e instanceof ApiError ? e.message : (e?.message && !/<!DOCTYPE|<html/i.test(e.message) ? e.message : "Can't reach my brain right now.");
       const safe = human.replace(/<[^>]+>/g, ' ').slice(0, 160);
       this.appendLog('omni', safe);
       this.setMood(e instanceof ApiError && e.kind === 'nokey' ? 'worried' : 'sad');
       this.setStatus(e instanceof ApiError && e.kind === 'nokey' ? 'Needs key' : 'Offline');
-      // don't speak HTML; short line only
       void this.speak(safe);
     }
+  }
+
+  beginThinking() {
+    this.setMood('thinking');
+    this.setStatus('Thinking…');
+    const lines = ['umm… ok!', 'umm… okay!', 'umm… still on it!', 'umm… ok, almost!'];
+    void this.speak(lines[0]);
+    this.ummIndex = 1;
+    if (this.thinkingTimer) window.clearInterval(this.thinkingTimer);
+    this.thinkingTimer = window.setInterval(() => {
+      const line = lines[this.ummIndex % lines.length];
+      this.ummIndex++;
+      this.setMood('thinking');
+      void this.speak(line);
+    }, 60000);
+  }
+
+  endThinking() {
+    if (this.thinkingTimer) { window.clearInterval(this.thinkingTimer); this.thinkingTimer = 0; }
   }
 
   appendLog(who: 'you' | 'omni', text: string) {
     const log = this.root.querySelector('#asst-prompt-log');
     if (!log) return;
+    const row = document.createElement('div');
+    row.className = `asst-line-row ${who}`;
     const div = document.createElement('div');
     div.className = `asst-line ${who}`;
     div.textContent = text;
-    log.appendChild(div);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'asst-copy';
+    btn.title = 'Copy';
+    btn.textContent = '⧉';
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); btn.textContent = '✓'; setTimeout(() => btn.textContent = '⧉', 800); } catch {}
+    });
+    row.appendChild(div);
+    row.appendChild(btn);
+    log.appendChild(row);
     log.scrollTop = log.scrollHeight;
   }
 
@@ -211,19 +261,10 @@ export class FloatingAssistant {
     if (wrap) wrap.style.transform = `translateY(${Math.sin(t * 0.7) * 1.2}px)`;
     const glow = this.root.querySelector('.asst-glow') as HTMLElement;
     if (glow) glow.style.opacity = String(0.28 + Math.sin(t * 1.6) * 0.1 + (this.talking ? 0.2 : 0));
-    // Talking: show FULL talking portrait only (no blend with closed-mouth idle — that caused a smear band)
-    if (this.faceTalk) {
-      if (this.talking) {
-        const pulse = 0.92 + Math.abs(Math.sin(t * 12)) * 0.08; // tiny brightness-like opacity pulse
-        this.faceTalk.style.opacity = String(pulse);
-        this.faceTalk.style.visibility = 'visible';
-        // dim base mood under talk so lips don't double-expose
-        const active = this.usingA ? this.faceA : this.faceB;
-        active.style.opacity = '0';
-      } else {
-        this.faceTalk.style.opacity = '0';
-        this.faceTalk.style.visibility = 'hidden';
-      }
+    // Lip frames driven by analyser / boundary events via setMouthLevel; tick only clears when idle
+    if (this.faceTalk && !this.talking) {
+      this.faceTalk.style.opacity = '0';
+      this.faceTalk.style.visibility = 'hidden';
     }
     // blink only on the active mood layer (not the talk layer)
     const active = this.usingA ? this.faceA : this.faceB;
@@ -279,10 +320,11 @@ export class FloatingAssistant {
   }
 
   async speakTTS(text: string): Promise<boolean> {
+    const voice = this.cfg.voiceId || (this.cfg.avatar === 'male' ? VOICE_IDS.male : VOICE_IDS.female);
     const r = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, speed: this.cfg.speechSpeed, voice_id: this.cfg.voiceId }),
+      body: JSON.stringify({ text, speed: this.cfg.speechSpeed, voice_id: voice }),
     });
     if (r.status === 204 || !r.ok) return false;
     const buf = await r.arrayBuffer();
@@ -292,9 +334,58 @@ export class FloatingAssistant {
     const src = this.audioCtx.createBufferSource();
     src.buffer = audio;
     src.playbackRate.value = this.cfg.speechSpeed;
-    src.connect(this.audioCtx.destination);
+    const analyser = this.audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+    analyser.connect(this.audioCtx.destination);
+    this.analyser = analyser;
+    this.lipSource = src;
+    this.startLipSync();
     src.start();
+    src.onended = () => this.stopLipSync();
     return true;
+  }
+
+  startLipSync() {
+    const data = new Uint8Array(this.analyser?.frequencyBinCount || 0);
+    const tick = () => {
+      this.lipRaf = requestAnimationFrame(tick);
+      if (!this.analyser || !this.talking) return;
+      this.analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      const level = Math.min(3, Math.floor(rms * 14));
+      this.setMouthLevel(level);
+    };
+    cancelAnimationFrame(this.lipRaf);
+    tick();
+  }
+
+  stopLipSync() {
+    cancelAnimationFrame(this.lipRaf);
+    this.lipRaf = 0;
+    this.setMouthLevel(0);
+  }
+
+  setMouthLevel(level: number) {
+    if (!this.faceTalk) return;
+    const avatar = (this.cfg.avatar || 'female') as AvatarId;
+    if (level <= 0) {
+      this.faceTalk.style.opacity = '0';
+      this.faceTalk.style.visibility = 'hidden';
+      const active = this.usingA ? this.faceA : this.faceB;
+      active.style.opacity = '1';
+      return;
+    }
+    this.faceTalk.src = mouthFrame(level, avatar);
+    this.faceTalk.style.visibility = 'visible';
+    this.faceTalk.style.opacity = '1';
+    const active = this.usingA ? this.faceA : this.faceB;
+    active.style.opacity = '0';
   }
 
   speakBrowser(text: string): Promise<void> {
@@ -302,18 +393,44 @@ export class FloatingAssistant {
       if (!('speechSynthesis' in window)) { resolve(); return; }
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = Math.min(1.4, Math.max(0.7, this.cfg.speechSpeed));
-      u.onend = () => resolve();
-      u.onerror = () => resolve();
+      u.rate = this.cfg.speechSpeed;
+      const wantFemale = (this.cfg.avatar || 'female') === 'female';
+      const voices = window.speechSynthesis.getVoices();
+      const pick = voices.find(v => wantFemale
+        ? /female|zira|samantha|victoria|karen|moira|fiona/i.test(v.name)
+        : /male|david|daniel|alex|fred|microsoft david/i.test(v.name))
+        || voices.find(v => wantFemale ? v.lang.startsWith('en') : v.lang.startsWith('en'));
+      if (pick) u.voice = pick;
+      let i = 0;
+      u.onboundary = () => {
+        i++;
+        this.setMouthLevel(1 + (i % 3));
+      };
+      u.onend = () => { this.stopLipSync(); resolve(); };
+      u.onerror = () => { this.stopLipSync(); resolve(); };
+      this.startLipSyncEstimate();
       window.speechSynthesis.speak(u);
     });
+  }
+
+  startLipSyncEstimate() {
+    cancelAnimationFrame(this.lipRaf);
+    const t0 = performance.now();
+    const tick = () => {
+      this.lipRaf = requestAnimationFrame(tick);
+      if (!this.talking) return;
+      const t = (performance.now() - t0) / 1000;
+      const level = 1 + Math.floor((Math.abs(Math.sin(t * 10)) * 2.9));
+      this.setMouthLevel(level);
+    };
+    tick();
   }
 
   setMood(mood: string, instant = false) {
     const m = nearestMood(mood);
     this.mood = m;
     this.idleMood = m;
-    const src = moodPortrait(m);
+    const src = moodPortrait(m, (this.cfg.avatar || 'female') as AvatarId);
     if (this.moodFadeTimer) {
       window.clearTimeout(this.moodFadeTimer);
       this.moodFadeTimer = 0;

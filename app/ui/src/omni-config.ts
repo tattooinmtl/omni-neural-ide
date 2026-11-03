@@ -2,10 +2,19 @@ import { defaultRhythm, type RhythmConfig } from './rhythm';
 
 export type OmniPersonalityPreset = 'chill' | 'focused' | 'hype' | 'sarcastic' | 'quiet' | 'custom';
 
+export type AvatarId = 'female' | 'male';
+
+export const VOICE_IDS = {
+  female: 'female-chengshu',
+  male: 'male-qn-qingse',
+} as const;
+
 export type OmniConfig = {
   show: boolean;
   speak: boolean;
   volunteer: boolean;
+  avatar: AvatarId;
+  autoCheckUpdates: boolean;
   // Intelligence
   reasoningDepth: 'off' | 'low' | 'medium' | 'high';
   responseLength: 'short' | 'medium' | 'long';
@@ -68,7 +77,9 @@ export function defaultOmniConfig(): OmniConfig {
     contextAmount: 'normal',
     timeoutMs: 20000,
     speechSpeed: 1.0,
-    voiceId: 'male-qn-qingse',
+    voiceId: VOICE_IDS.female,
+    avatar: 'female',
+    autoCheckUpdates: true,
     preset: 'chill',
     tone: 0.35,
     humor: 0.45,
@@ -129,6 +140,7 @@ export function personalitySystemPrompt(cfg: OmniConfig): string {
   return `${base}
 Never read code, markdown, chain-of-thought, or meta narration aloud. Never reveal hidden reasoning.
 If you would include code, omit it and say you put it in the chat.
+You may use tools: delegate_to_coding_agent(task) and update_app(). NEVER claim you sent a task or updated the app unless a tool actually ran.
 ${length} Language: ${cfg.language}. Humor=${cfg.humor.toFixed(2)} chattiness=${cfg.chattiness.toFixed(2)} formality=${cfg.formality.toFixed(2)}.`;
 }
 

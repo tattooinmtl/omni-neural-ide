@@ -5,6 +5,8 @@ mod fsapi;
 mod ai;
 mod pool;
 mod activity;
+mod update;
+mod delegate;
 mod harness;
 mod state;
 mod tts;
@@ -172,6 +174,10 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/tts", post(tts::tts))
         .route("/api/activity", get(activity::activity))
         .route("/api/client-log", post(fsapi::client_log))
+        .route("/api/update/check", get(update::check))
+        .route("/api/update/apply", post(update::apply))
+        .route("/api/omni/delegate", post(delegate::delegate_to_coding_agent))
+        .route("/api/omni/delegates", get(delegate::list_delegates))
         .route("/api/harness/run", post(harness::run_loop))
         .route("/api/harness/drift-mode", post(harness::set_drift_mode))
         .with_state(state.clone());

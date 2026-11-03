@@ -22,6 +22,15 @@ pub struct ChatOut {
     pub model: String,
 }
 
+#[derive(Serialize)]
+pub struct OmniOut {
+    pub content: String,
+    pub model: String,
+    pub tools_used: Vec<String>,
+    pub delegate: Option<crate::delegate::DelegateOut>,
+    pub update: Option<serde_json::Value>,
+}
+
 #[derive(Deserialize)]
 pub struct OmniIn {
     pub message: String,
@@ -68,7 +77,7 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
 }
 
 /// Omni the Presence — separate MiniMax session/history, same pool.
-pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>) -> Result<Json<ChatOut>, (StatusCode, String)> {
+pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>) -> Result<Json<OmniOut>, (StatusCode, String)> {
     let text = body.message.trim().to_string();
     if text.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "empty message".into()));
@@ -89,14 +98,123 @@ pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>
         }
     }
     let history: Vec<Msg> = st.omni_history.read().iter().map(|(r,c)| Msg{role:r.clone(), content:c.clone()}).collect();
-    let system = body.system.unwrap_or_else(|| "You are Omni the Presence — brief, human, factual. You are NOT the coding agent. Never output chain-of-thought, code fences, or meta narration. If code is needed, say you put it in the chat. 1–2 short sentences unless asked for detail.".into());
+    let tool_preamble = "You have tools: delegate_to_coding_agent(task) and update_app(). Never claim you did something unless a tool actually ran. If the user asks you to tell/ask the Coding Agent / coder to do work, reply ONLY with: TOOL:delegate_to_coding_agent:<task text>. If the user asks to update/upgrade/restart the app to a new version, reply ONLY with: TOOL:update_app. Otherwise chat normally — brief, human, factual. Never invent tool results.";
+    let system = body.system.unwrap_or_else(|| "You are Omni the Presence — brief, human, factual. You are NOT the Coding Agent.".into());
+    let system = format!("{system}
+{tool_preamble}");
     let max_tokens = body.max_tokens.unwrap_or(256);
     let temperature = body.temperature.unwrap_or(0.55);
-    let content = call_minimax_opts(&key, &system, &history, max_tokens, temperature).await?;
+
+    // Deterministic intent short-circuit (never hallucinate handoff/update)
+    let lower = text.to_lowercase();
+    let wants_delegate = ["tell the coding", "tell the coder", "ask the coding", "ask the coder", "delegate", "coding agent", "send to coding", "hand off", "handoff"]
+        .iter().any(|k| lower.contains(k))
+        && ["make", "build", "create", "write", "implement", "fix", "add", "do"].iter().any(|k| lower.contains(k));
+    let wants_update = ["update the app", "upgrade the app", "check for update", "install update", "update omni", "update yourself"]
+        .iter().any(|k| lower.contains(k));
+
+    let mut tools_used = Vec::new();
+    let mut delegate = None;
+    let mut update = None;
+    let mut content;
+
+    if wants_update {
+        let r = crate::update::apply(State(st.clone()), Json(crate::update::UpdateApplyIn { mode: None, mock_stage: None })).await;
+        match r {
+            Ok(j) => {
+                tools_used.push("update_app".into());
+                update = Some(serde_json::to_value(&j.0).unwrap_or_default());
+                content = if j.0.ok {
+                    "New version's out — restarting, back in a sec.".to_string()
+                } else {
+                    j.0.message
+                };
+            }
+            Err((_, e)) => content = format!("Couldn't start the update: {e}"),
+        }
+    } else if wants_delegate {
+        // Extract task: prefer text after "to " / "agent" etc.
+        let task = extract_delegate_task(&text);
+        let r = crate::delegate::delegate_to_coding_agent(
+            State(st.clone()),
+            Json(crate::delegate::DelegateIn { task: task.clone(), from: Some("Omni".into()) }),
+        ).await;
+        match r {
+            Ok(j) => {
+                tools_used.push("delegate_to_coding_agent".into());
+                delegate = Some(j.0.clone());
+                content = if j.0.files_written.is_empty() {
+                    format!("Sent to the Coding Agent ({}).", j.0.task_id.chars().take(8).collect::<String>())
+                } else {
+                    format!("Coding Agent finished — it's in {}.", j.0.files_written.join(", "))
+                };
+            }
+            Err((_, e)) => content = format!("Couldn't reach the Coding Agent: {e}"),
+        }
+    } else {
+        content = call_minimax_opts(&key, &system, &history, max_tokens, temperature).await?;
+        // Model-emitted tool lines
+        if let Some(task) = content.strip_prefix("TOOL:delegate_to_coding_agent:") {
+            let task = task.trim().to_string();
+            let r = crate::delegate::delegate_to_coding_agent(
+                State(st.clone()),
+                Json(crate::delegate::DelegateIn { task, from: Some("Omni".into()) }),
+            ).await;
+            match r {
+                Ok(j) => {
+                    tools_used.push("delegate_to_coding_agent".into());
+                    delegate = Some(j.0.clone());
+                    content = if j.0.files_written.is_empty() {
+                        format!("Sent to the Coding Agent ({}).", &j.0.task_id[..8.min(j.0.task_id.len())])
+                    } else {
+                        format!("Coding Agent finished — it's in {}.", j.0.files_written.join(", "))
+                    };
+                }
+                Err((_, e)) => content = format!("Couldn't reach the Coding Agent: {e}"),
+            }
+        } else if content.trim() == "TOOL:update_app" {
+            let r = crate::update::apply(State(st.clone()), Json(crate::update::UpdateApplyIn { mode: None, mock_stage: None })).await;
+            match r {
+                Ok(j) => {
+                    tools_used.push("update_app".into());
+                    update = Some(serde_json::to_value(&j.0).unwrap_or_default());
+                    content = if j.0.ok { "New version's out — restarting, back in a sec.".into() } else { j.0.message };
+                }
+                Err((_, e)) => content = format!("Couldn't start the update: {e}"),
+            }
+        } else {
+            content = claim_guard(&content, &tools_used);
+        }
+    }
+
     st.omni_history.write().push(("assistant".into(), content.clone()));
-    // Optional mood tag via NVIDIA side model (fail open)
     let _ = tag_mood_best_effort(&st, &content).await;
-    Ok(Json(ChatOut { content, model: "Omni the Presence".into() }))
+    Ok(Json(OmniOut { content, model: "Omni the Presence".into(), tools_used, delegate, update }))
+}
+
+fn extract_delegate_task(text: &str) -> String {
+    let lower = text.to_lowercase();
+    for sep in ["to make ", "to build ", "to create ", "to write ", "to implement ", "make ", "build ", "create "] {
+        if let Some(i) = lower.find(sep) {
+            return text[i + sep.len()..].trim().to_string();
+        }
+    }
+    text.trim().to_string()
+}
+
+/// Strip false "I sent/added/done" claims when no tool ran.
+fn claim_guard(content: &str, tools: &[String]) -> String {
+    if !tools.is_empty() { return content.to_string(); }
+    let lower = content.to_lowercase();
+    let claim = [
+        "i added the task", "i sent it", "i handed it", "i told the coding", "i told the coder",
+        "task to the chat", "already sent", "done — sent", "i've added", "i have added",
+    ].iter().any(|c| lower.contains(c));
+    if claim {
+        "I can send that to the Coding Agent — want me to?".to_string()
+    } else {
+        content.to_string()
+    }
 }
 
 /// Rate-limited volunteer remark (fail open / empty).
@@ -198,7 +316,7 @@ async fn tag_mood_best_effort(st: &AppState, text: &str) -> Option<String> {
     .ok()
 }
 
-fn bump_minimax_rate(st: &AppState) -> Result<(), (StatusCode, String)> {
+pub fn bump_minimax_rate(st: &AppState) -> Result<(), (StatusCode, String)> {
     let mut rate = st.rate.write();
     let now = Utc::now().timestamp();
     let hour = now / 3600;
@@ -232,7 +350,7 @@ async fn call_minimax(key: &str, system: &str, messages: &[Msg]) -> Result<Strin
     call_minimax_opts(key, system, messages, 2048, 0.3).await
 }
 
-async fn call_minimax_opts(
+pub async fn call_minimax_opts(
     key: &str,
     system: &str,
     messages: &[Msg],

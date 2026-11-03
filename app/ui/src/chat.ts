@@ -45,7 +45,7 @@ export class ChatPanel {
   }
 
   private render() {
-    const title = this.mode === 'ultra' ? 'OMNI CHAT' : 'CHAT';
+    const title = this.mode === 'ultra' ? 'CODING AGENT' : 'CODING AGENT';
     this.el.innerHTML = `
       <div class="chat-header">
         <div class="title">
@@ -76,7 +76,7 @@ export class ChatPanel {
       </div>
       <div class="thinking ${this.thinking && this.mode==='ultra' ? '' : 'hidden'}" id="thinking">
         <span class="dots"><span></span><span></span><span></span></span>
-        Omni Ultra is thinking
+        Coding Agent is thinking
       </div>
     `;
     this.paintMessages();
@@ -86,13 +86,15 @@ export class ChatPanel {
   private paintMessages() {
     const host = this.el.querySelector('#chat-msgs')!;
     host.innerHTML = this.messages.filter(m => m.role !== 'system').map((m, i) => {
-      const who = m.role === 'user' ? 'You' : (this.mode === 'ultra' ? 'OMNI' : 'OMNI-CODE');
+      const who = m.role === 'user' ? 'You' : 'Coding Agent';
       const cls = m.role === 'user' ? 'user' : 'ai';
       const avatar = m.role === 'user' ? 'U' : (this.mode === 'ultra' ? '◈' : '◎');
       const body = formatBody(m.content);
       const time = this.times[i] || '';
       return `<div class="msg ${cls}">
-        <div class="msg-head"><div class="avatar">${avatar}</div><strong>${who}</strong></div>
+        <div class="msg-head"><div class="avatar">${avatar}</div><strong>${who}</strong>
+          <button type="button" class="msg-copy" data-copy="${i}" title="Copy">⧉</button>
+        </div>
         <div class="msg-body">${body}</div>
         ${time ? `<div class="msg-foot"><span class="msg-time">${time}</span></div>` : ''}
       </div>`;
@@ -125,12 +127,45 @@ export class ChatPanel {
     });
     input?.setAttribute('enterkeyhint', 'enter');
     this.el.querySelector('#clear-chat')?.addEventListener('click', () => this.clear());
+    input?.style.setProperty('user-select', 'text');
+    this.el.querySelectorAll('.msg-copy').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const i = Number((btn as HTMLElement).dataset.copy || -1);
+        const m = this.messages.filter(x => x.role !== 'system')[i];
+        if (!m) return;
+        try { await navigator.clipboard.writeText(m.content); (btn as HTMLElement).textContent = '✓'; } catch {}
+      });
+    });
+    // code card copy
+    this.el.querySelectorAll('.code-card-head .copy').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const pre = (btn as HTMLElement).closest('.code-card')?.querySelector('pre');
+        if (!pre) return;
+        try { await navigator.clipboard.writeText(pre.textContent || ''); } catch {}
+      });
+    });
     this.el.querySelector('[data-act="model"]')?.addEventListener('click', () => {
       const opts = ['Omni Ultra 1.2', 'MiniMax M3.1 Flash', 'NVIDIA Nemotron 3.5'];
       const i = opts.indexOf(this.model);
       this.model = opts[(i + 1) % opts.length];
       this.render();
     });
+  }
+
+  /** Omni handoff: visible message + start Coding Agent run. */
+  injectFromOmni(delegate: { task_id: string; message: string; coding_reply: string; files_written: string[] }) {
+    const head = `From Omni: ${delegate.message}`;
+    this.messages.push({ role: 'user', content: head });
+    this.times.push('');
+    if (delegate.coding_reply) {
+      this.messages.push({ role: 'assistant', content: delegate.coding_reply });
+      this.times.push('');
+    }
+    if (delegate.files_written?.length) {
+      this.messages.push({ role: 'assistant', content: `Wrote: ${delegate.files_written.join(', ')}` });
+      this.times.push('');
+    }
+    this.render();
   }
 
   async send(text: string) {

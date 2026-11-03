@@ -22,6 +22,7 @@ pub struct AppState {
     pub rate: RwLock<RateCounters>,
     pub pool: AgentPool,
     /// Separate Omni the Presence chat history
+    pub delegate_log: RwLock<Vec<crate::delegate::DelegateOut>>,
     pub omni_history: RwLock<Vec<(String,String)>>,
 }
 
@@ -64,6 +65,7 @@ impl AppState {
             keys: RwLock::new(keys),
             rate: RwLock::new(RateCounters::default()),
             pool: AgentPool::new(max_agents),
+            delegate_log: RwLock::new(Vec::new()),
             omni_history: RwLock::new(Vec::new()),
         };
         if let Some(p) = project {

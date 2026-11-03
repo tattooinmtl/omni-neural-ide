@@ -426,6 +426,8 @@ async function boot() {
   chat = new ChatPanel(document.getElementById('chat')!, mode);
   assistant = FloatingAssistant.create(document.getElementById('assistant-root')!);
   (window as any).__omniReloadConfig = () => assistant.reloadConfig();
+  (window as any).__codingChat = chat;
+  (window as any).__omniReloadConfig = () => assistant.reloadConfig();
   (assistant as any).moods = MOODS;
   setTimeout(() => assistant.greet(), 500);
   // periodic presence remarks
@@ -481,3 +483,24 @@ async function boot() {
 }
 
 boot();
+
+// Auto-check updates toast
+(async () => {
+  try {
+    const { loadOmniConfig } = await import('./omni-config');
+    const cfg = loadOmniConfig();
+    if (!cfg.autoCheckUpdates) return;
+    const r = await api.updateCheck();
+    if (!r.available) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast-update';
+    toast.innerHTML = `<span>Update ${r.latest} available</span><button type="button" id="toast-upd">Update</button><button type="button" id="toast-dismiss">Later</button>`;
+    document.body.appendChild(toast);
+    toast.querySelector('#toast-dismiss')?.addEventListener('click', () => toast.remove());
+    toast.querySelector('#toast-upd')?.addEventListener('click', async () => {
+      const mode = new URLSearchParams(location.search).get('mode') || 'plain';
+      const a = await api.updateApply(mode);
+      toast.querySelector('span')!.textContent = a.message;
+    });
+  } catch { /* ignore */ }
+})();

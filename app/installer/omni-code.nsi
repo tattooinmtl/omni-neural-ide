@@ -1,14 +1,14 @@
-; OMNI-CODE v1.1.2 per-user Windows installer (no admin)
+; OMNI-CODE v1.2.0 per-user Windows installer (no admin)
 ; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.1.2"
+!define PRODUCT_VERSION "1.2.0"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.1.2.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.2.0.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user
@@ -123,6 +123,7 @@ Section "OMNI-CODE (required)" SecMain
   File "/oname=omni-core.exe" "..\..\..\omni-installer\payload\bin\omni-core.exe"
   File "/oname=WebView2Loader.dll" "..\..\..\omni-installer\payload\bin\WebView2Loader.dll"
   File "/oname=libunwind.dll" "..\..\..\omni-installer\payload\bin\libunwind.dll"
+  File "/oname=omni-updater.exe" "..\..\..\omni-installer\payload\bin\omni-updater.exe"
 
   SetOutPath "$INSTDIR\ui\dist"
   File /r "..\..\..\omni-installer\payload\ui\dist\*.*"
