@@ -41,17 +41,17 @@ export function moodPalette(mood: string, overrideRgb?: string | null): MoodPale
 
 type Panel = { cx: number; cy: number; rx: number; ry: number };
 
-/** Tight panels tuned to v1.2.2 digital bases (inside sockets/slit only). */
+/** Tight panels tuned to v1.2.4 digital bases (inside sockets/slit only). */
 export const PANELS_BY_AVATAR: Record<AvatarId, { leftEye: Panel; rightEye: Panel; mouth: Panel }> = {
   female: {
-    leftEye: { cx: 0.355, cy: 0.395, rx: 0.082, ry: 0.048 },
-    rightEye: { cx: 0.645, cy: 0.395, rx: 0.082, ry: 0.048 },
-    mouth: { cx: 0.5, cy: 0.675, rx: 0.092, ry: 0.0135 },
+    leftEye: { cx: 0.360, cy: 0.385, rx: 0.078, ry: 0.045 },
+    rightEye: { cx: 0.645, cy: 0.378, rx: 0.078, ry: 0.045 },
+    mouth: { cx: 0.505, cy: 0.663, rx: 0.088, ry: 0.012 },
   },
   male: {
-    leftEye: { cx: 0.355, cy: 0.392, rx: 0.08, ry: 0.045 },
-    rightEye: { cx: 0.645, cy: 0.392, rx: 0.08, ry: 0.045 },
-    mouth: { cx: 0.5, cy: 0.665, rx: 0.096, ry: 0.014 },
+    leftEye: { cx: 0.348, cy: 0.385, rx: 0.078, ry: 0.042 },
+    rightEye: { cx: 0.655, cy: 0.378, rx: 0.078, ry: 0.042 },
+    mouth: { cx: 0.502, cy: 0.634, rx: 0.092, ry: 0.012 },
   },
 };
 

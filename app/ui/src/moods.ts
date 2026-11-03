@@ -30,14 +30,14 @@ export function nearestMood(mood: string): string {
   return NEAREST[k] || 'neutral';
 }
 
-export const DIGITAL_FACE_ASSET_VER = '1.2.3';
+export const DIGITAL_FACE_ASSET_VER = '1.2.4';
 
 export function moodPortrait(mood: string, avatar: AvatarId = 'female', faceMode: 'classic' | 'digital' = 'digital'): string {
   const m = nearestMood(mood);
   if (faceMode === 'digital') {
     // versioned lip-free bases only; query busts WebView2 cache
     const file = avatar === 'male' ? 'male.jpg' : 'female.jpg';
-    return `/omni-presence/digital/v123/${file}?v=${DIGITAL_FACE_ASSET_VER}`;
+    return `/omni-presence/digital/v124/${file}?v=${DIGITAL_FACE_ASSET_VER}`;
   }
   if (avatar === 'male') return `/omni-presence/male/${m}.jpg?v=${DIGITAL_FACE_ASSET_VER}`;
   return `/omni-presence/${m}.jpg?v=${DIGITAL_FACE_ASSET_VER}`;

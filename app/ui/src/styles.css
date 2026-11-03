@@ -287,11 +287,11 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 }
 
 /* ===== Omni the Presence ===== */
-#assistant-root{width:260px;height:auto;min-height:320px;max-height:560px;display:flex;flex-direction:column}
+#assistant-root{width:280px;height:auto;min-height:320px;max-height:620px;display:flex;flex-direction:column;overflow:hidden}
 #assistant-root.prompt-open{height:auto}
-#assistant-root .asst-bar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#061820;font-size:11px;color:#7dd3fc;cursor:move}
-.asst-face-wrap{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;background:#041018}
-.asst-face{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .35s ease;pointer-events:none;visibility:hidden}
+#assistant-root .asst-bar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#061820;font-size:11px;color:#7dd3fc;cursor:move;flex-shrink:0}
+.asst-face-wrap{position:relative;width:100%;aspect-ratio:1/1;flex:0 0 auto;overflow:hidden;background:#041018;isolation:isolate}
+.asst-face{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 38%;opacity:0;transition:opacity .35s ease;pointer-events:none;visibility:hidden}
 .asst-face.active{opacity:1;visibility:visible}
 .asst-face.talk-layer{z-index:2;transition:none!important;opacity:0;visibility:hidden}
 /* talk-layer opacity/visibility driven only by inline styles while speaking */
@@ -338,5 +338,5 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 .avatar-pick button{flex:1;padding:8px;border-radius:8px;border:1px solid #1e3a4a;background:#061018;color:#9ad;cursor:pointer}
 .avatar-pick button.active{border-color:#00ff88;color:#00ff88}
 
-.asst-digital{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;mix-blend-mode:normal}
+.asst-digital{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:4;mix-blend-mode:normal}
 .asst-face-wrap.digital-mode .asst-face.talk-layer{display:none!important}
