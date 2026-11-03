@@ -2,7 +2,12 @@
   "RT_GROUP_ICON": {
     "#1": {
       "0000": [
-        "../embed/omni.ico"
+        "../embed/omni-16.png",
+        "../embed/omni-32.png",
+        "../embed/omni-48.png",
+        "../embed/omni-64.png",
+        "../embed/omni-128.png",
+        "../embed/omni-256.png"
       ]
     }
   },
@@ -11,7 +16,7 @@
       "0409": {
         "identity": {
           "name": "OMNI-CODE.Gateway",
-          "version": "1.1.1"
+          "version": "1.1.2"
         },
         "description": "OMNI-CODE Gateway",
         "minimum-os": "win7",
@@ -24,15 +29,15 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "1.1.1.0",
-          "product_version": "1.1.1.0"
+          "file_version": "1.1.2.0",
+          "product_version": "1.1.2.0"
         },
         "info": {
           "0409": {
             "ProductName": "OMNI-CODE",
             "FileDescription": "OMNI-CODE Gateway",
-            "ProductVersion": "1.1.1",
-            "FileVersion": "1.1.1",
+            "ProductVersion": "1.1.2",
+            "FileVersion": "1.1.2",
             "OriginalFilename": "launcher.exe",
             "CompanyName": "tattooinmtl",
             "InternalName": "OMNI-CODE Gateway"

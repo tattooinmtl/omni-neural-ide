@@ -1,14 +1,14 @@
-; OMNI-CODE v1.1.1 per-user Windows installer (no admin)
+; OMNI-CODE v1.1.2 per-user Windows installer (no admin)
 ; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.1.1"
+!define PRODUCT_VERSION "1.1.2"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.1.1.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.1.2.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user
@@ -163,13 +163,13 @@ SectionEnd
 Section "Start Menu shortcut" SecSM
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
   CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-  CreateShortCut "$SMPROGRAMS\$StartMenuFolder\OMNI-CODE.lnk" "$INSTDIR\bin\launcher.exe" "" "$INSTDIR\bin\launcher.exe" 0 SW_SHOWNORMAL "" "OMNI-CODE launcher"
+  CreateShortCut "$SMPROGRAMS\$StartMenuFolder\OMNI-CODE.lnk" "$INSTDIR\bin\launcher.exe" "" "$INSTDIR\bin\launcher.exe" 0 SW_SHOWNORMAL "" "OMNI-CODE Gateway"
   CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall OMNI-CODE.lnk" "$INSTDIR\Uninstall.exe"
   !insertmacro MUI_STARTMENU_WRITE_END
 SectionEnd
 
 Section "Desktop shortcut" SecDesktop
-  CreateShortCut "$DESKTOP\OMNI-CODE.lnk" "$INSTDIR\bin\launcher.exe" "" "$INSTDIR\bin\launcher.exe" 0 SW_SHOWNORMAL "" "OMNI-CODE launcher"
+  CreateShortCut "$DESKTOP\OMNI-CODE.lnk" "$INSTDIR\bin\launcher.exe" "" "$INSTDIR\bin\launcher.exe" 0 SW_SHOWNORMAL "" "OMNI-CODE Gateway"
 SectionEnd
 
 Section "Uninstall"

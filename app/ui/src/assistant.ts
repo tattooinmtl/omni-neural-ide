@@ -15,7 +15,10 @@ export class FloatingAssistant {
   t0 = performance.now();
   faceA!: HTMLImageElement;
   faceB!: HTMLImageElement;
+  faceTalk!: HTMLImageElement;
   usingA = true;
+  moodFadeTimer = 0;
+  idleMood = 'neutral';
   volunteerEnabled = true;
   lastVolunteer = 0;
   lastRhythmFire = 0;
@@ -38,8 +41,8 @@ export class FloatingAssistant {
       <div class="asst-face-wrap" id="asst-face-wrap">
         <img class="asst-face active" id="asst-face-a" alt="Omni" draggable="false"/>
         <img class="asst-face" id="asst-face-b" alt="" draggable="false"/>
+        <img class="asst-face talk-layer" id="asst-face-talk" alt="" draggable="false"/>
         <div class="asst-glow"></div>
-        <div class="asst-mouth-overlay" id="asst-mouth"></div>
       </div>
       <div class="asst-status" id="asst-status">Ready · neutral</div>
       <button type="button" class="asst-omni-btn" id="asst-omni-btn">Omni</button>
@@ -55,6 +58,8 @@ export class FloatingAssistant {
     `;
     a.faceA = root.querySelector('#asst-face-a') as HTMLImageElement;
     a.faceB = root.querySelector('#asst-face-b') as HTMLImageElement;
+    a.faceTalk = root.querySelector('#asst-face-talk') as HTMLImageElement;
+    a.faceTalk.src = '/omni-presence/talking.jpg';
     a.setMood('neutral', true);
     root.querySelector('#asst-close')?.addEventListener('click', () => a.hide());
     root.querySelector('#asst-omni-btn')?.addEventListener('click', () => a.togglePrompt());
@@ -195,27 +200,48 @@ export class FloatingAssistant {
   }
 
   tick() {
+    const freeze = this.root.dataset.freezeFace === '1';
+    if (freeze) {
+      const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement;
+      if (wrap) wrap.style.transform = 'none';
+      return; // screenshots / debug: do not mutate face layers
+    }
     const t = (performance.now() - this.t0) / 1000;
     const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement;
     if (wrap) wrap.style.transform = `translateY(${Math.sin(t * 0.7) * 1.2}px)`;
     const glow = this.root.querySelector('.asst-glow') as HTMLElement;
-    if (glow) glow.style.opacity = String(0.35 + Math.sin(t * 1.6) * 0.12 + (this.talking ? 0.25 : 0));
-    const mouth = this.root.querySelector('#asst-mouth') as HTMLElement;
-    if (mouth) {
+    if (glow) glow.style.opacity = String(0.28 + Math.sin(t * 1.6) * 0.1 + (this.talking ? 0.2 : 0));
+    // Talking: show FULL talking portrait only (no blend with closed-mouth idle — that caused a smear band)
+    if (this.faceTalk) {
       if (this.talking) {
-        mouth.style.transform = `scaleY(${0.15 + Math.abs(Math.sin(t * 14)) * 0.55})`;
-        mouth.style.opacity = '0.55';
+        const pulse = 0.92 + Math.abs(Math.sin(t * 12)) * 0.08; // tiny brightness-like opacity pulse
+        this.faceTalk.style.opacity = String(pulse);
+        this.faceTalk.style.visibility = 'visible';
+        // dim base mood under talk so lips don't double-expose
+        const active = this.usingA ? this.faceA : this.faceB;
+        active.style.opacity = '0';
       } else {
-        mouth.style.transform = 'scaleY(0.12)';
-        mouth.style.opacity = '0';
+        this.faceTalk.style.opacity = '0';
+        this.faceTalk.style.visibility = 'hidden';
       }
     }
-    if (Math.sin(t * 2.05) > 0.992) {
-      this.faceA.style.filter = this.usingA ? 'brightness(0.55)' : '';
-      this.faceB.style.filter = !this.usingA ? 'brightness(0.55)' : '';
+    // blink only on the active mood layer (not the talk layer)
+    const active = this.usingA ? this.faceA : this.faceB;
+    const other = this.usingA ? this.faceB : this.faceA;
+    // Hard-hide inactive mood layer except during an in-progress crossfade
+    if (!this.moodFadeTimer) {
+      other.style.opacity = '0';
+      other.style.visibility = 'hidden';
+      other.classList.remove('active');
+      active.style.opacity = '1';
+      active.style.visibility = 'visible';
+      active.classList.add('active');
+    }
+    other.style.filter = '';
+    if (!this.talking && Math.sin(t * 2.05) > 0.992) {
+      active.style.filter = 'brightness(0.55)';
     } else {
-      this.faceA.style.filter = '';
-      this.faceB.style.filter = '';
+      active.style.filter = '';
     }
   }
 
@@ -226,6 +252,13 @@ export class FloatingAssistant {
       return;
     }
     this.talking = true;
+    if (this.faceTalk) {
+      if (!this.faceTalk.getAttribute('src')) this.faceTalk.src = '/omni-presence/talking.jpg';
+      this.faceTalk.style.visibility = 'visible';
+      this.faceTalk.style.opacity = '1';
+      const active = this.usingA ? this.faceA : this.faceB;
+      active.style.opacity = '0';
+    }
     this.setStatus('Speaking…');
     const approxMs = Math.min(10000, 700 + speak.length * (55 / Math.max(0.7, this.cfg.speechSpeed)));
     try {
@@ -236,6 +269,11 @@ export class FloatingAssistant {
     }
     window.setTimeout(() => {
       this.talking = false;
+      if (this.faceTalk) {
+        this.faceTalk.style.opacity = '0';
+        this.faceTalk.style.visibility = 'hidden';
+      }
+      this.setMood(this.idleMood || this.mood, true);
       this.setStatus(`Ready · ${this.mood}`);
     }, approxMs);
   }
@@ -274,23 +312,60 @@ export class FloatingAssistant {
   setMood(mood: string, instant = false) {
     const m = nearestMood(mood);
     this.mood = m;
+    this.idleMood = m;
     const src = moodPortrait(m);
-    const incoming = this.usingA ? this.faceB : this.faceA;
-    const outgoing = this.usingA ? this.faceA : this.faceB;
-    if (instant || outgoing.getAttribute('src') === src) {
+    if (this.moodFadeTimer) {
+      window.clearTimeout(this.moodFadeTimer);
+      this.moodFadeTimer = 0;
+    }
+    const showOnlyA = () => {
       this.faceA.src = src;
       this.faceA.classList.add('active');
+      this.faceA.style.opacity = '1';
+      this.faceA.style.visibility = 'visible';
       this.faceB.classList.remove('active');
+      this.faceB.style.opacity = '0';
+      this.faceB.style.visibility = 'hidden';
       this.usingA = true;
+    };
+    if (instant) {
+      showOnlyA();
     } else {
-      incoming.onload = () => {
-        incoming.classList.add('active');
-        outgoing.classList.remove('active');
-        this.usingA = !this.usingA;
-      };
-      incoming.src = src;
+      const incoming = this.usingA ? this.faceB : this.faceA;
+      const outgoing = this.usingA ? this.faceA : this.faceB;
+      if (outgoing.getAttribute('src') === src) {
+        // already on this mood — keep single layer
+        outgoing.classList.add('active');
+        outgoing.style.opacity = '1';
+        outgoing.style.visibility = 'visible';
+        incoming.classList.remove('active');
+        incoming.style.opacity = '0';
+        incoming.style.visibility = 'hidden';
+      } else {
+        let started = false;
+        const beginFade = () => {
+          if (started) return;
+          started = true;
+          // start fully transparent so both frames are never solidly stacked
+          incoming.classList.add('active');
+          incoming.style.visibility = 'visible';
+          incoming.style.opacity = '0';
+          void incoming.offsetWidth;
+          incoming.style.opacity = '1';
+          this.moodFadeTimer = window.setTimeout(() => {
+            outgoing.classList.remove('active');
+            outgoing.style.opacity = '0';
+            outgoing.style.visibility = 'hidden';
+            this.moodFadeTimer = 0;
+          }, 380);
+          this.usingA = !this.usingA;
+        };
+        incoming.onload = () => beginFade();
+        if (incoming.getAttribute('src') !== src) incoming.src = src;
+        if (incoming.complete && incoming.getAttribute('src') === src) beginFade();
+      }
     }
-    this.setStatus(`Ready · ${this.mood}`);
+    if (!this.talking) this.setStatus(`Ready · ${this.mood}`);
   }
 
   setStatus(s: string) {
