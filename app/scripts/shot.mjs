@@ -37,6 +37,13 @@ async function shot(mode, port) {
     document.body.style.cssText += ';margin:0;padding:0;overflow:hidden;width:1168px;height:784px;position:fixed;inset:0';
     const app=document.getElementById('app');
     if (app) app.style.cssText += ';margin:0;padding:0;width:1168px;height:784px;position:fixed;inset:0;border:none;box-shadow:none';
+    const mode = new URLSearchParams(location.search).get('mode') || 'plain';
+    const side = document.getElementById('sidebar');
+    const chat = document.getElementById('chat');
+    if (side) side.style.width = mode === 'ultra' ? '197px' : '207px';
+    if (chat) { chat.style.width = mode === 'ultra' ? '341px' : '348px'; chat.style.minWidth = '0'; }
+    document.querySelectorAll('.resizer-v').forEach(el => { el.style.width = '0px'; el.style.minWidth = '0'; });
+    document.documentElement.style.setProperty('--activity-w', mode === 'ultra' ? '50px' : '48px');
     const msgs=document.getElementById('chat-msgs');
     if (msgs) msgs.scrollTop = 0;
   });

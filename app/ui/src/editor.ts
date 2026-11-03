@@ -84,8 +84,8 @@ export function initEditor(host: HTMLElement, mode: 'plain' | 'ultra') {
     value: '',
     language: 'plaintext',
     theme: 'omni',
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: mode === 'ultra' ? 13 : 14,
+    lineHeight: mode === 'ultra' ? 19 : 22,
     fontFamily: 'Cascadia Code, Consolas, Courier New, monospace',
     fontLigatures: false,
     minimap: { enabled: false },
@@ -94,8 +94,10 @@ export function initEditor(host: HTMLElement, mode: 'plain' | 'ultra') {
     renderLineHighlight: 'line',
     cursorBlinking: 'smooth',
     tabSize: mode === 'ultra' ? 2 : 4,
-    padding: { top: 6 },
-    lineNumbersMinChars: 3,
+    padding: { top: 2 },
+    lineNumbersMinChars: 2,
+    lineDecorationsWidth: 8,
+    glyphMargin: false,
     guides: { indentation: true, highlightActiveIndentation: true, bracketPairs: false },
     scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
   });
@@ -114,7 +116,7 @@ export function initEditor(host: HTMLElement, mode: 'plain' | 'ultra') {
 
 export function setModeTheme(mode: 'plain' | 'ultra') {
   themeForMode(mode);
-  editor?.updateOptions({ tabSize: mode === 'ultra' ? 2 : 4 });
+  editor?.updateOptions({ tabSize: mode === 'ultra' ? 2 : 4, fontSize: mode === 'ultra' ? 13 : 14, lineHeight: mode === 'ultra' ? 19 : 22 });
 }
 
 export function setEditorCallbacks(opts: {

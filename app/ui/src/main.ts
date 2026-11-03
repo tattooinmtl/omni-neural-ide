@@ -439,6 +439,12 @@ async function boot() {
   (assistant as any).moods = MOODS;
   if (mode === 'ultra') setTimeout(() => assistant.greet(), 500);
   bindChrome();
+  // Exact mock panel seams (activity|explorer|editor|chat)
+  const side = document.getElementById('sidebar');
+  const chatEl = document.getElementById('chat');
+  if (side) side.style.width = mode === 'ultra' ? '197px' : '207px';
+  if (chatEl) chatEl.style.width = mode === 'ultra' ? '341px' : '348px';
+  document.documentElement.style.setProperty('--activity-w', mode === 'ultra' ? '50px' : '48px');
 
   if (demo) {
     try {

@@ -18,10 +18,10 @@ export default function DashboardPage() {
       setLoading(false);
     }' geadent((){
       load();
-  }, []);
+    }, []);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-96">Loading…</div>;
-  }
-  return <main className={cn('p-6')}><Card /></main>;
+    return
+      <div className={cn('flex items-center justify-center h-96',
+        'text-muted-foreground')}>
 }/ ]v>

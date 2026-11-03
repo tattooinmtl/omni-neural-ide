@@ -36,7 +36,7 @@ export function renderTree(
 
   const rootLabel = document.createElement('div');
   rootLabel.className = 'tree-root-label';
-  rootLabel.innerHTML = `<span class="chev">▼</span><span class="icon">${iconFor(root)}</span> ${escapeHtml(root.name)}`;
+  rootLabel.innerHTML = `<span class="chev">${svg.chevDown}</span><span class="icon">${iconFor(root)}</span> ${escapeHtml(root.name)}`;
   host.appendChild(rootLabel);
 
   const walk = (nodes: TreeNode[] | undefined, depth: number) => {
@@ -51,7 +51,7 @@ export function renderTree(
       const isDir = n.kind === 'dir';
       const open = expanded.has(n.path);
       el.innerHTML = `
-        <span class="chev">${isDir ? (open ? '▼' : '▶') : ''}</span>
+        <span class="chev">${isDir ? (open ? svg.chevDown : svg.chevRight) : ''}</span>
         <span class="icon">${iconFor(n)}</span>
         <span class="name">${escapeHtml(n.name)}</span>`;
       el.addEventListener('click', (e) => {
