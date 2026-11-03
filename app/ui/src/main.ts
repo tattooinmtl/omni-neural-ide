@@ -165,7 +165,10 @@ function paintTabs() {
   const bar = document.getElementById('tabbar')!;
   const tabs = getTabs();
   const active = getActive()?.path || null;
-  bar.innerHTML = tabs.map(t => {
+  const maxVisible = mode === 'plain' ? 4 : 8;
+  const visible = tabs.slice(0, maxVisible);
+  const overflow = tabs.length > maxVisible;
+  bar.innerHTML = visible.map(t => {
     const ext = t.name.split('.').pop();
     const ico = ext === 'py' ? svg.py : (ext === 'tsx' || ext === 'ts') ? svg.ts : ext === 'css' ? svg.css : ext === 'html' ? svg.html : svg.file;
     return `<div class="tab ${t.path === active ? 'active' : ''}" data-path="${encodeURIComponent(t.path)}">
@@ -174,7 +177,7 @@ function paintTabs() {
       <span>${t.name}${t.dirty ? ' •' : ''}</span>
       <button class="close" data-close="${encodeURIComponent(t.path)}">✕</button>
     </div>`;
-  }).join('');
+  }).join('') + ((mode==='plain' && tabs.length>=4) || overflow ? `<div class="tab tab-overflow" title="More tabs">…</div>` : '');
   bar.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', e => {
       const btn = e.target as HTMLElement;
@@ -186,7 +189,7 @@ function paintTabs() {
       }
       const path = decodeURIComponent((tab as HTMLElement).dataset.path!);
       activate(path); paintTabs(); paintBreadcrumbs();
-      renderTree(document.getElementById('file-tree')!, tree, path, onOpenFile, expanded);
+      renderTree(document.getElementById('file-tree')!, tree, path, onOpenFile, expanded, path ? [path] : []);
     });
   });
   paintBreadcrumbs();
@@ -197,10 +200,13 @@ function paintBreadcrumbs() {
   const t = getActive();
   if (!t) { bc.innerHTML = `<span class="crumb">No file open</span>`; return; }
   let parts = t.path.replace(/\\/g, '/').split('/').filter(Boolean);
-  // drop absolute prefix up to project root name
   const rootName = tree?.name;
   const idx = rootName ? parts.lastIndexOf(rootName) : -1;
   if (idx >= 0) parts = parts.slice(idx + 1);
+  // Mock breadcrumb collapses nested src/src -> src
+  if (mode === 'ultra' && parts[0] === 'src' && parts[1] === 'src') {
+    parts = ['src', ...parts.slice(2)];
+  }
   let crumbs = parts.map((p, i) => `<span class="${i === parts.length - 1 ? 'current' : 'crumb'}">${p}</span>`).join('<span class="sep">›</span>');
   if (mode === 'plain' && t.name === 'app.py') {
     crumbs += `<span class="sep">›</span><span class="crumb">...</span><span class="sep">›</span><span class="current">create_app()</span>`;
@@ -226,7 +232,7 @@ async function onOpenFile(node: TreeNode) {
     const r = await api.readFile(node.path);
     openTab(node.path, r.content);
     paintTabs();
-    renderTree(document.getElementById('file-tree')!, tree, node.path, onOpenFile, expanded);
+    renderTree(document.getElementById('file-tree')!, tree, node.path, onOpenFile, expanded, [node.path]);
   } catch (e: any) { console.error(e); alert(`Open failed: ${e.message}`); }
 }
 
@@ -286,7 +292,7 @@ function bindChrome() {
     try {
       const r = await api.tree();
       tree = r.tree; projectRoot = r.root;
-      renderTree(document.getElementById('file-tree')!, tree, getActive()?.path || null, onOpenFile, expanded);
+      renderTree(document.getElementById('file-tree')!, tree, getActive()?.path || null, onOpenFile, expanded, getActive()?.path ? [getActive()!.path] : []);
     } catch {}
   });
   document.querySelector('[data-act="settings"]')?.addEventListener('click', () => {
@@ -351,12 +357,15 @@ async function openProject(path: string) {
   expanded.clear();
   // Mock-matching expand state
   if (mode === 'plain') {
-    expandPaths(['backend', 'frontend']); // .vscode, __pycache__, api, models, services stay collapsed
+    expandPaths(['backend', 'frontend']); // __pycache__/api/models/services stay collapsed
   } else {
-    expandPaths(['src', 'src/app', 'src/services', 'src/utils', 'src/components', 'src/styles']);
-    // .omni / .vscode stay collapsed unless we want their files visible — mock shows config under them collapsed often; expand parents only
+    expandPaths([
+      '.omni', '.vscode',
+      'src', 'src/src', 'src/src/app',
+      'src/src/services', 'src/src/utils', 'src/src/components', 'src/src/styles',
+    ]);
   }
-  renderTree(document.getElementById('file-tree')!, tree, null, onOpenFile, expanded);
+  renderTree(document.getElementById('file-tree')!, tree, null, onOpenFile, expanded, []);
   const title = document.querySelector('.sidebar-header .project-title');
   if (title) title.textContent = mode==='plain' ? 'OMNI-CODE' : (tree.name || 'PROJECT').toUpperCase();
   const label = document.querySelector('.sidebar-header .label');
@@ -379,7 +388,7 @@ async function bootDemo() {
   // Open in mock left-to-right order, then re-activate the first (active) tab
   const files = mode === 'plain'
     ? ['backend/app.py', 'backend/routes.py', 'backend/database.py', 'frontend/index.html']
-    : ['src/app/dashboard.tsx', 'src/services/api.ts', 'src/services/realtime.ts', 'src/app/layout.tsx', 'src/styles/globals.css'];
+    : ['src/src/app/dashboard.tsx', 'src/src/services/api.ts', 'src/src/services/realtime.ts', 'src/src/app/layout.tsx', 'src/src/styles/globals.css'];
   for (const rel of files) {
     const n = findByRel(tree!, rel);
     if (n) await onOpenFile(n);
@@ -390,8 +399,17 @@ async function bootDemo() {
   if (primary) {
     activate(primary.path);
     paintTabs();
-    renderTree(document.getElementById('file-tree')!, tree, primary.path, onOpenFile, expanded);
+    const highlights = mode === 'plain'
+      ? [primary.path, ...['backend/api', 'backend/services'].map(r => findByRel(tree!, r)?.path).filter((x): x is string => !!x)]
+      : [primary.path];
+    (window as any).__omniHi = highlights;
+    renderTree(document.getElementById('file-tree')!, tree, primary.path, onOpenFile, expanded, highlights);
   }
+  // Chat must show first message at top (not scrolled to bottom)
+  requestAnimationFrame(() => {
+    const msgs = document.getElementById('chat-msgs');
+    if (msgs) msgs.scrollTop = 0;
+  });
   // Chat fixture via real ChatPanel API
   const transcriptUrl = `/fixtures-chat/${mode === 'plain' ? 'plain' : 'ultra'}.json`;
   try {
@@ -434,10 +452,10 @@ async function boot() {
     try {
       const t = await api.tree();
       tree = t.tree; projectRoot = t.root;
-      if (tree) { expandAll(tree); renderTree(document.getElementById('file-tree')!, tree, null, onOpenFile, expanded); }
-      else renderTree(document.getElementById('file-tree')!, null, null, onOpenFile, expanded);
+      if (tree) { expandAll(tree); renderTree(document.getElementById('file-tree')!, tree, null, onOpenFile, expanded, []); }
+      else renderTree(document.getElementById('file-tree')!, null, null, onOpenFile, expanded, []);
     } catch {
-      renderTree(document.getElementById('file-tree')!, null, null, onOpenFile, expanded);
+      renderTree(document.getElementById('file-tree')!, null, null, onOpenFile, expanded, []);
     }
   }
 

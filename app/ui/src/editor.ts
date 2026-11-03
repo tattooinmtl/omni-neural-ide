@@ -69,8 +69,10 @@ function themeForMode(mode: 'plain' | 'ultra') {
       'editorGutter.background': base.gutter,
       'editorCursor.foreground': mode === 'ultra' ? '#22d3ee' : '#ffffff',
       'editor.lineHighlightBackground': '#ffffff08',
-      'editorIndentGuide.background': '#ffffff10',
-      'editorIndentGuide.activeBackground': '#ffffff22',
+      'editorIndentGuide.background': '#ffffff18',
+      'editorIndentGuide.activeBackground': '#ffffff30',
+      'editorIndentGuide.background1': '#ffffff18',
+      'editorIndentGuide.activeBackground1': '#ffffff30',
     },
   });
   monaco.editor.setTheme('omni');
@@ -94,7 +96,8 @@ export function initEditor(host: HTMLElement, mode: 'plain' | 'ultra') {
     tabSize: mode === 'ultra' ? 2 : 4,
     padding: { top: 6 },
     lineNumbersMinChars: 3,
-    scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+    guides: { indentation: true, highlightActiveIndentation: true, bracketPairs: false },
+    scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
   });
   editor.onDidChangeModelContent(() => {
     if (!activePath || !editor) return;

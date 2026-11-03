@@ -24,12 +24,16 @@ export function renderTree(
   activePath: string | null,
   onOpen: (node: TreeNode) => void,
   expanded: Set<string>,
+  highlights: string[] = [],
 ) {
   host.innerHTML = '';
   if (!root) {
     host.innerHTML = `<div class="tree-item" style="color:var(--fg-mute)">Open a folder to begin</div>`;
     return;
   }
+  const hi = new Set(highlights.filter(Boolean));
+  if (activePath) hi.add(activePath);
+
   const rootLabel = document.createElement('div');
   rootLabel.className = 'tree-root-label';
   rootLabel.innerHTML = `<span class="chev">▼</span><span class="icon">${iconFor(root)}</span> ${escapeHtml(root.name)}`;
@@ -39,7 +43,10 @@ export function renderTree(
     if (!nodes) return;
     for (const n of nodes) {
       const el = document.createElement('div');
-      el.className = 'tree-item' + (n.path === activePath ? ' active' : '');
+      const matched = [...hi].some(h => h === n.path || h.endsWith('/' + n.name));
+      el.className = 'tree-item';
+      if (n.path === activePath) el.classList.add('active', 'selected');
+      else if (matched) el.classList.add('active', 'row-hi');
       el.style.setProperty('--depth', String(depth));
       const isDir = n.kind === 'dir';
       const open = expanded.has(n.path);
@@ -52,7 +59,7 @@ export function renderTree(
         if (isDir) {
           if (expanded.has(n.path)) expanded.delete(n.path);
           else expanded.add(n.path);
-          renderTree(host, root, activePath, onOpen, expanded);
+          renderTree(host, root, activePath, onOpen, expanded, highlights);
         } else onOpen(n);
       });
       host.appendChild(el);
@@ -64,8 +71,8 @@ export function renderTree(
 
 function sortNodes(nodes: TreeNode[] | undefined): TreeNode[] | undefined {
   if (!nodes) return nodes;
-  const dirOrder = ['.vscode', '.omni', 'backend', 'frontend', 'src', '__pycache__', 'api', 'models', 'services', 'app', 'components', 'services', 'styles', 'utils', 'assets', 'pages', 'charts', 'ui'];
-  const fileOrder = ['routes.py', 'database.py', 'utils.py', 'app.py', 'index.html', 'dashboard.tsx', 'layout.tsx', 'globals.css', 'api.ts', 'realtime.ts', 'cn.ts', 'format.ts', 'card.tsx', 'config.json', 'settings.json', '.gitignore', 'README.md', 'requirements.txt', 'package.json', 'tsconfig.json'];
+  const dirOrder = ['.omni', '.vscode', 'backend', 'frontend', 'src', '__pycache__', 'api', 'models', 'app', 'services', 'utils', 'assets', 'components', 'pages', 'styles', 'ui', 'charts'];
+  const fileOrder = ['config.json', 'settings.json', 'layout.tsx', 'dashboard.tsx', 'routes.py', 'database.py', 'utils.py', 'app.py', 'index.html', 'api.ts', 'realtime.ts', 'format.ts', 'cn.ts', 'globals.css', '.gitignore', 'package.json', 'tsconfig.json', 'README.md', 'requirements.txt'];
   const rank = (n: TreeNode, list: string[]) => {
     const i = list.indexOf(n.name);
     return i >= 0 ? i : 1000;

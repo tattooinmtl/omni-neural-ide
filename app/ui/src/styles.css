@@ -6,8 +6,8 @@
   --menu-h: 24px;
   --status-h: 24px;
   --activity-w: 48px;
-  --sidebar-w: 208px;
-  --chat-w: 348px;
+  --sidebar-w: 180px;
+  --chat-w: 290px;
   --tab-h: 38px;
 }
 body.mode-plain {
@@ -34,19 +34,20 @@ body.mode-light {
   --logo:#007acc; --status-fg:#ffffff; --menu-h-visible:24px; --title-h:32px; --win-ctrl:#333;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+html,body,#app{margin:0!important;padding:0!important;border:0!important;outline:0!important;box-shadow:none!important}
 html,body{height:100%;width:100%;overflow:hidden;background:var(--bg-editor);color:var(--fg);font-family:var(--font);font-size:14px;user-select:none}
 button,input,textarea{font-family:inherit}button{cursor:pointer;background:none;border:none;color:inherit}
 #app{display:flex;flex-direction:column;height:100vh;width:100vw}
 
 /* Exact geometry for shot viewport */
-html.shot,html.shot body,html.shot #app{width:1168px!important;height:784px!important}
-body.mode-plain.shot-geo, html.shot body.mode-plain{--title-h:40px;--menu-h-visible:32px;--status-h:24px;--activity-w:48px;--sidebar-w:208px;--chat-w:348px}
-body.mode-ultra.shot-geo, html.shot body.mode-ultra{--title-h:48px;--menu-h-visible:0px;--status-h:24px;--activity-w:48px;--sidebar-w:200px;--chat-w:348px}
+html.shot,html.shot body,html.shot #app{width:1168px!important;height:784px!important;margin:0!important;padding:0!important;overflow:hidden!important;position:fixed!important;inset:0!important}
+body.mode-plain.shot-geo, html.shot body.mode-plain{--title-h:40px;--menu-h-visible:32px;--status-h:24px;--activity-w:48px;--sidebar-w:180px;--chat-w:290px}
+body.mode-ultra.shot-geo, html.shot body.mode-ultra{--title-h:48px;--menu-h-visible:0px;--status-h:24px;--activity-w:48px;--sidebar-w:180px;--chat-w:290px}
 
 .titlebar{
   height:var(--title-h);min-height:var(--title-h);background:var(--bg-title);
-  display:flex;align-items:center;justify-content:space-between;padding:0 0 0 12px;
-  border-bottom:1px solid var(--border-soft);-webkit-app-region:drag;
+  display:flex;align-items:center;justify-content:space-between;padding:0 0 0 10px;
+  border-bottom:1px solid var(--border-soft);-webkit-app-region:drag;margin:0;
 }
 .titlebar .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:0.03em;font-size:18px;color:#fff;text-transform:none}
 .titlebar .brand .logo-svg{width:24px;height:24px;display:block}
@@ -57,8 +58,8 @@ body.mode-plain .titlebar .brand .ultra{display:none}
 body.mode-plain .titlebar .brand .ultra-dot{display:none}
 .titlebar .brand .ultra-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);display:inline-block;margin-left:2px}
 body.mode-plain .omni-connected, body.mode-plain .title-center, body.mode-plain .title-tools{display:none!important}
-.title-center{display:flex;align-items:center;gap:14px;flex:1;justify-content:center}
-.title-icons{display:flex;gap:12px;color:var(--accent);align-items:center}
+.title-center{display:flex;align-items:center;gap:10px;flex:1;justify-content:center}
+.title-icons{display:flex;gap:10px;color:var(--accent);align-items:center}
 .title-icons svg{width:16px;height:16px}
 .omni-connected{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:12px;font-weight:500}
 .omni-connected .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
@@ -98,18 +99,18 @@ body.mode-ultra .sidebar-header .project-title{display:none}
 body.mode-plain .sidebar-actions{display:none}
 .sidebar-actions button{color:var(--fg-mute);width:22px;height:22px;border-radius:3px}
 .file-tree{flex:1;overflow:auto;padding:2px 0}
-.tree-root-label{display:flex;align-items:center;gap:4px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
-.tree-item{display:flex;align-items:center;gap:5px;padding:1px 8px 1px calc(8px + var(--depth,0)*12px);font-size:13px;height:22px;white-space:nowrap}
+.tree-root-label{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.tree-item{display:flex;align-items:center;gap:7px;padding:0 10px 0 calc(10px + var(--depth,0)*14px);font-size:14.5px;height:22px;white-space:nowrap}
 .tree-item:hover{background:rgba(255,255,255,.04)}
 .tree-item.active{background:var(--accent-soft)}
 .tree-item .chev{width:12px;font-size:10px;color:var(--fg-mute)}
-.tree-item .icon,.tree-item svg.icon{width:18px;height:18px;flex-shrink:0}
+.tree-item .icon,.tree-item svg.icon{width:22px;height:22px;flex-shrink:0}
 .sidebar-sections{border-top:1px solid var(--border-soft)}
 .sidebar-section{height:22px;display:flex;align-items:center;gap:4px;padding:0 8px;font-size:11px;color:var(--fg-dim);letter-spacing:.06em;text-transform:uppercase}
 
 .editor-col{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg-editor)}
 .tabbar{height:var(--tab-h);background:var(--bg-tabbar);display:flex;border-bottom:1px solid var(--border-soft);overflow-x:auto}
-.tab{display:flex;align-items:center;gap:8px;padding:0 16px;font-size:13.5px;color:var(--fg-dim);border-right:1px solid var(--border-soft);position:relative;white-space:nowrap}
+.tab{display:flex;align-items:center;gap:6px;padding:0 10px;font-size:13px;color:var(--fg-dim);border-right:1px solid var(--border-soft);position:relative;white-space:nowrap}
 .tab.active{color:var(--fg);background:var(--tab-active-bg)}
 .tab.active::after{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:var(--accent)}
 .tab .dot-file{width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:.85}
@@ -208,3 +209,18 @@ body.mode-plain .statusbar .ultra-only{display:none}
 .tok-cm{color:#6a9955}.tok-type{color:#4ec9b0}
 body.mode-ultra .tok-kw{color:#d48fd6}body.mode-ultra .tok-str{color:#e6b35a}
 body.mode-ultra .tok-fn{color:#82aaff}
+
+.tree-item.row-hi{background:rgba(255,255,255,.06)}
+.tree-item.selected{background:var(--accent-soft)}
+.tab-overflow{opacity:.7;padding:0 12px;font-size:16px;letter-spacing:2px}
+.statusbar{font-size:14px!important}
+.statusbar .item,.statusbar .badge{font-size:14px}
+.statusbar .left,.statusbar .right{gap:14px}
+.msg{font-size:14px}
+.msg-body{font-size:14px;line-height:1.55}
+.chat-messages{padding:8px 12px 6px;gap:12px;overflow:auto}
+
+body.mode-plain #app{background:var(--bg-title)}
+body.mode-ultra #app{background:var(--bg-title)}
+.chat-header{margin:0}
+.model-picker-wrap{margin:0}

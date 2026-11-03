@@ -38,6 +38,10 @@ export class ChatPanel {
     this.showThinking = !!opts?.thinking && this.mode === 'ultra';
     this.thinking = this.showThinking;
     this.render();
+    requestAnimationFrame(() => {
+      const host = this.el.querySelector('#chat-msgs') as HTMLElement | null;
+      if (host) host.scrollTop = 0;
+    });
   }
 
   private render() {
@@ -93,7 +97,9 @@ export class ChatPanel {
         ${time ? `<div class="msg-foot"><span class="msg-time">${time}</span></div>` : ''}
       </div>`;
     }).join('');
-    host.scrollTop = host.scrollHeight;
+    // Fixture transcripts keep first message visible; live replies stick to bottom
+    const fixture = this.times.some(x => !!x);
+    host.scrollTop = fixture ? 0 : host.scrollHeight;
   }
 
   private bind() {

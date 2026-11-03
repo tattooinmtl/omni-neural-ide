@@ -29,11 +29,18 @@ async function shot(mode, port) {
   const page = await browser.newPage({ viewport: { width: 1168, height: 784 }, deviceScaleFactor: 1 });
   await page.goto(`http://127.0.0.1:${port}/?mode=${mode}&demo=1`, { waitUntil: 'networkidle', timeout: 120000 });
   await page.waitForTimeout(3500);
+
   await page.evaluate(() => {
     document.getElementById('assistant-root')?.classList.add('assistant-hidden');
     document.getElementById('overlay')?.classList.add('hidden');
+    document.documentElement.style.cssText = 'margin:0;padding:0;overflow:hidden;width:1168px;height:784px';
+    document.body.style.cssText += ';margin:0;padding:0;overflow:hidden;width:1168px;height:784px;position:fixed;inset:0';
+    const app=document.getElementById('app');
+    if (app) app.style.cssText += ';margin:0;padding:0;width:1168px;height:784px;position:fixed;inset:0;border:none;box-shadow:none';
+    const msgs=document.getElementById('chat-msgs');
+    if (msgs) msgs.scrollTop = 0;
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(800);
   const path = join(shots, `omni-${mode}.png`);
   await page.screenshot({ path, type: 'png', clip: { x:0,y:0,width:1168,height:784 } });
   console.log('wrote', path);

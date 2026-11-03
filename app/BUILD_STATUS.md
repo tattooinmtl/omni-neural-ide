@@ -1,19 +1,14 @@
 # OMNI-CODE build status
 
 ## Visual match (2026-11-02 America/Toronto)
-- Ban check: PASS (no mockup pixels / chrome strips)
-- Plain mean abs RGB vs mockup: **16.45** (blurred 14.38) — target <6 not met
-- Ultra mean abs RGB vs mockup: **18.45** (blurred 16.64) — target <6 not met
-- Shots: `shots/omni-plain.png`, `shots/omni-ultra.png`, `shots/compare-*.png`, `shots/heat-*.png`
-- Real HTML/CSS/SVG/Monaco only; fixtures OMNI-CODE / OMNI-APP; chat JSON via ChatPanel
+- Ban check: PASS
+- Plain mean abs RGB: **~16.8** (target <6 not met)
+- Ultra mean abs RGB: **~19.5** (target <6 not met)
+- Shots: `shots/omni-plain.png`, `omni-ultra.png`, `compare-*.png`, `heat-*.png`
 
 ## This pass
-- Scale: UI ~14–15px, Monaco 15px / LH22; panels activity 48 / explorer 208 / chat 348 (measured)
-- Fixtures: exact trees; Plain app.py 19 lines; Ultra dashboard.tsx 27 lines; no plan.md/agents.md in demo
-- Chat: rounded bordered cards, code filename header + copy, fixture text, Ultra Clear chat + thinking footer
-- Title/status: Plain logo+OMNI-CODE + menu; Ultra OMNI-CODE Ultra + cyan Ultra/dot/</>; status items
-- Custom Monaco theme (pink keywords, orange strings)
-- Core skips harness scaffold when `.omni-fixture` present
-
-## Remaining mean gap
-- JPEG mockup noise, font/icon glyph differences, and Monaco rasterization vs mock art keep mean ~16–18 without overlay cheats
+- Ultra dashboard.tsx exact 27 lines incl. `}' geadent((){` and `}/ ]v>`
+- Ultra tree: OMNI-APP > .omni/config.json, .vscode/settings.json, src>src>app/services/utils/components/styles
+- Tabs: dashboard/api/realtime/layout/globals.css with active dot
+- Chat scrollTop=0 so first You card visible
+- Flush frame CSS (fixed inset 0); larger explorer rows/icons; plain … tab overflow; status 14px
