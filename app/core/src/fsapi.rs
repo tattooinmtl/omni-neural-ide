@@ -53,6 +53,11 @@ pub struct KeysIn {
     pub max_agents: Option<u32>,
     pub nvidia_embed_model: Option<String>,
     pub nvidia_side_model: Option<String>,
+    pub mcp_search_key: Option<String>,
+    pub mcp_search_url: Option<String>,
+    pub mcp_computer_bot: Option<String>,
+    pub mcp_computer_secret: Option<String>,
+    pub mcp_computer_url: Option<String>,
 }
 
 
@@ -66,12 +71,22 @@ pub struct KeysOut {
     pub max_agents: u32,
     pub nvidia_embed_model: String,
     pub nvidia_side_model: String,
+    pub mcp_search_key: String,
+    pub mcp_search_url: String,
+    pub has_mcp_search: bool,
+    pub mcp_computer_bot: String,
+    pub mcp_computer_secret: String,
+    pub mcp_computer_url: String,
+    pub has_mcp_computer: bool,
 }
 
 pub async fn get_keys(State(st): S) -> Json<KeysOut> {
     let keys = st.keys.read().clone();
     let mm = keys.minimax.clone().unwrap_or_default();
     let nv = keys.nvidia.clone().unwrap_or_default();
+    let sk = keys.mcp_search_key.clone().unwrap_or_default();
+    let cb = keys.mcp_computer_bot.clone().unwrap_or_default();
+    let cs = keys.mcp_computer_secret.clone().unwrap_or_default();
     Json(KeysOut {
         has_minimax: !mm.is_empty(),
         has_nvidia: !nv.is_empty(),
@@ -88,6 +103,13 @@ pub async fn get_keys(State(st): S) -> Json<KeysOut> {
         } else {
             keys.nvidia_side_model
         },
+        has_mcp_search: !sk.is_empty(),
+        mcp_search_key: sk,
+        mcp_search_url: keys.mcp_search_url.clone().unwrap_or_else(|| crate::mcp::DEFAULT_SEARCH_URL.into()),
+        has_mcp_computer: !cb.is_empty() && !cs.is_empty(),
+        mcp_computer_bot: cb,
+        mcp_computer_secret: cs,
+        mcp_computer_url: keys.mcp_computer_url.clone().unwrap_or_else(|| crate::mcp::DEFAULT_COMPUTER_URL.into()),
     })
 }
 
@@ -108,6 +130,21 @@ pub async fn set_keys(State(st): S, Json(body): Json<KeysIn>) -> Result<Json<ser
     }
     if let Some(v) = body.nvidia_side_model {
         if !v.is_empty() { keys.nvidia_side_model = v; }
+    }
+    if let Some(v) = body.mcp_search_key {
+        if !v.is_empty() { keys.mcp_search_key = Some(v); }
+    }
+    if let Some(v) = body.mcp_search_url {
+        keys.mcp_search_url = if v.is_empty() { None } else { Some(v) };
+    }
+    if let Some(v) = body.mcp_computer_bot {
+        keys.mcp_computer_bot = if v.is_empty() { None } else { Some(v) };
+    }
+    if let Some(v) = body.mcp_computer_secret {
+        if !v.is_empty() { keys.mcp_computer_secret = Some(v); }
+    }
+    if let Some(v) = body.mcp_computer_url {
+        keys.mcp_computer_url = if v.is_empty() { None } else { Some(v) };
     }
     save_keys(&st, &keys).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     *st.keys.write() = keys;

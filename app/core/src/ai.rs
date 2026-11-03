@@ -68,11 +68,17 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
         "MiniMax API key not set — enter it in Settings → Providers".into(),
     ))?;
     let system = format!(
-        "You are OMNI-CODE {}, a coding harness worker. Stay inside the project plan allow-list. Prefer concrete code. Mode: {}.",
+        "You are OMNI-CODE {}, a coding harness worker. Stay inside the project plan allow-list. Prefer concrete code. Mode: {}. Tools: to search the web reply ONLY with TOOL:web_search:<query>. Never invent search results.",
         if *st.mode.read() == "ultra" { "Ultra" } else { "" },
         st.mode.read()
     );
-    let content = call_minimax(&key, &system, &body.messages).await?;
+    let mut content = call_minimax(&key, &system, &body.messages).await?;
+    if let Some(q) = content.strip_prefix("TOOL:web_search:") {
+        match crate::mcp::run_named_tool(&st, "web_search", q.trim()).await {
+            Ok(text) => content = format!("[web_search]\n{text}"),
+            Err(e) => content = format!("Search failed: {e}"),
+        }
+    }
     Ok(Json(ChatOut { content, model: "MiniMax (brain)".into() }))
 }
 
@@ -98,7 +104,7 @@ pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>
         }
     }
     let history: Vec<Msg> = st.omni_history.read().iter().map(|(r,c)| Msg{role:r.clone(), content:c.clone()}).collect();
-    let tool_preamble = "You have tools: delegate_to_coding_agent(task) and update_app(). Never claim you did something unless a tool actually ran. If the user asks you to tell/ask the Coding Agent / coder to do work, reply ONLY with: TOOL:delegate_to_coding_agent:<task text>. If the user asks to update/upgrade/restart the app to a new version, reply ONLY with: TOOL:update_app. Otherwise chat normally — brief, human, factual. Never invent tool results.";
+    let tool_preamble = "You have tools: delegate_to_coding_agent(task), update_app(), web_search(query), computer_status, computer_screenshot. Never claim you did something unless a tool actually ran. If the user asks you to tell/ask the Coding Agent / coder to do work, reply ONLY with: TOOL:delegate_to_coding_agent:<task text>. If the user asks to update/upgrade/restart the app to a new version, reply ONLY with: TOOL:update_app. To search the web, reply ONLY with: TOOL:web_search:<query>. For a read-only computer check, reply ONLY with: TOOL:computer_status or TOOL:computer_screenshot. Acting computer tools need UI confirmation — never claim you clicked/typed/ran a command. Otherwise chat normally — brief, human, factual. Never invent tool results.";
     let system = body.system.unwrap_or_else(|| "You are Omni the Presence — brief, human, factual. You are NOT the Coding Agent.".into());
     let system = format!("{system}
 {tool_preamble}");
@@ -110,6 +116,7 @@ pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>
     let wants_delegate = ["tell the coding", "tell the coder", "ask the coding", "ask the coder", "delegate", "coding agent", "send to coding", "hand off", "handoff"]
         .iter().any(|k| lower.contains(k))
         && ["make", "build", "create", "write", "implement", "fix", "add", "do"].iter().any(|k| lower.contains(k));
+    let wants_search = lower.contains("search the web") || lower.starts_with("search for ") || lower.contains("look up ");
     let wants_update = ["update the app", "upgrade the app", "check for update", "install update", "update omni", "update yourself"]
         .iter().any(|k| lower.contains(k));
 
@@ -118,7 +125,13 @@ pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>
     let mut update = None;
     let mut content;
 
-    if wants_update {
+    if wants_search {
+        let q = text.trim().to_string();
+        match crate::mcp::run_named_tool(&st, "web_search", &q).await {
+            Ok(text) => { tools_used.push("web_search".into()); content = text; }
+            Err(e) => content = format!("Search failed: {e}"),
+        }
+    } else if wants_update {
         let r = crate::update::apply(State(st.clone()), Json(crate::update::UpdateApplyIn { mode: None, mock_stage: None })).await;
         match r {
             Ok(j) => {
@@ -181,6 +194,21 @@ pub async fn omni_chat(State(st): State<Arc<AppState>>, Json(body): Json<OmniIn>
                     content = if j.0.ok { "New version's out — restarting, back in a sec.".into() } else { j.0.message };
                 }
                 Err((_, e)) => content = format!("Couldn't start the update: {e}"),
+            }
+        } else if let Some(q) = content.strip_prefix("TOOL:web_search:") {
+            match crate::mcp::run_named_tool(&st, "web_search", q.trim()).await {
+                Ok(text) => { tools_used.push("web_search".into()); content = text; }
+                Err(e) => content = format!("Search failed: {e}"),
+            }
+        } else if content.trim() == "TOOL:computer_status" {
+            match crate::mcp::run_named_tool(&st, "computer_status", "").await {
+                Ok(text) => { tools_used.push("computer_status".into()); content = text; }
+                Err(e) => content = format!("Computer status failed: {e}"),
+            }
+        } else if content.trim() == "TOOL:computer_screenshot" {
+            match crate::mcp::run_named_tool(&st, "computer_screenshot", "").await {
+                Ok(text) => { tools_used.push("computer_screenshot".into()); content = text; }
+                Err(e) => content = format!("Screenshot failed: {e}"),
             }
         } else {
             content = claim_guard(&content, &tools_used);

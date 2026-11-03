@@ -134,6 +134,12 @@ export const api = {
     req<{ ok: boolean }>('/api/fs/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
   termExec: (cmd: string, cwd?: string) =>
     req<{ ok: boolean; stdout: string; stderr: string; code: number; cwd: string }>('/api/term/exec', { method: 'POST', body: JSON.stringify({ cmd, cwd }) }),
+  mcpStatus: () => req<any>('/api/mcp/status'),
+  mcpTest: (which: 'search' | 'computer') =>
+    req<any>('/api/mcp/test', { method: 'POST', body: JSON.stringify({ which }) }),
+  mcpTools: () => req<{ tools: any[] }>('/api/mcp/tools'),
+  mcpCall: (tool: string, arguments_?: Record<string, unknown>, confirm?: boolean) =>
+    req<any>('/api/mcp/call', { method: 'POST', body: JSON.stringify({ tool, arguments: arguments_ || {}, confirm }) }),
   omniVolunteer: (input: string) =>
     req<{ content: string; model: string }>('/api/omni/volunteer', { method: 'POST', body: JSON.stringify({ task: 'volunteer', input }) }),
   embed: (texts: string[]) =>

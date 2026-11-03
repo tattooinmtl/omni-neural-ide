@@ -6,6 +6,7 @@ mod ai;
 mod pool;
 mod activity;
 mod update;
+mod mcp;
 mod delegate;
 mod harness;
 mod state;
@@ -207,6 +208,10 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/client-log", post(fsapi::client_log))
         .route("/api/update/check", get(update::check))
         .route("/api/update/apply", post(update::apply))
+        .route("/api/mcp/status", get(mcp::status))
+        .route("/api/mcp/test", post(mcp::test_connector))
+        .route("/api/mcp/tools", get(mcp::list_tools))
+        .route("/api/mcp/call", post(mcp::call_tool))
         .route("/api/omni/delegate", post(delegate::delegate_to_coding_agent))
         .route("/api/omni/delegates", get(delegate::list_delegates))
         .route("/api/harness/run", post(harness::run_loop))

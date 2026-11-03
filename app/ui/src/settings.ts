@@ -15,6 +15,7 @@ const CATEGORIES = [
   { id: 'appearance', label: 'Appearance / Theme' },
   { id: 'editor', label: 'Editor' },
   { id: 'providers', label: 'Providers' },
+  { id: 'mcp', label: 'MCP / Tools' },
   { id: 'assistant', label: 'Omni the Presence' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'shortcuts', label: 'Shortcuts' },
@@ -88,6 +89,9 @@ export class SettingsView {
       case 'providers':
         await this.paintProviders(page);
         break;
+      case 'mcp':
+        await this.paintMcp(page);
+        break;
       case 'general':
         page.innerHTML = `<h2>General</h2>
           <p class="settings-hint">Launch mode is chosen in the OMNI-CODE Gateway each start.</p>
@@ -125,7 +129,7 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.3.1</p>
+          <p><strong>OMNI-CODE</strong> v1.3.2</p>
           <p class="settings-hint">Go Gateway → Rust core → native WebView2. No Electron.</p>
           <p class="settings-hint">Install: %USERPROFILE%\.omni-neural-ide</p>
           <div class="settings-field" style="margin-top:12px">
@@ -441,6 +445,133 @@ page.querySelector('#avatar-female')?.addEventListener('click', () => {
       const cfg = loadOmniConfig(); cfg.autoCheckUpdates=(e.target as HTMLInputElement).checked; saveOmniConfig(cfg);
     });
 
+  }
+
+
+  private async paintMcp(page: Element) {
+    page.innerHTML = `<h2>MCP / Tools</h2>
+      <p class="settings-hint">Built-in connectors for GWN Search MCP and Computer (OmniBots). Keys stay in keys\\providers.json — never committed. Acting computer tools ask for confirmation.</p>
+      <div class="settings-providers">
+        <div class="settings-role">
+          <h3>GWN Search MCP <span class="role-pill">Streamable HTTP</span></h3>
+          <p>Endpoint: <code>https://search.globalwarningnetworks.com/mcp</code> · tool <code>web_search</code></p>
+          <label class="settings-field">MCP URL
+            <input id="mcp-search-url" type="text" spellcheck="false"/>
+          </label>
+          <label class="settings-field">Bearer / API key
+            <div class="settings-field row">
+              <input id="mcp-search-key" type="password" autocomplete="off" spellcheck="false"/>
+              <button type="button" class="settings-btn ghost" id="tog-mcp-search">Show</button>
+            </div>
+          </label>
+          <div class="settings-field row">
+            <button class="settings-btn primary" id="save-mcp-search">Save Search</button>
+            <button class="settings-btn" id="test-mcp-search">Test</button>
+            <span id="mcp-search-status" class="settings-status">—</span>
+          </div>
+        </div>
+        <div class="settings-role">
+          <h3>GWN Computer <span class="role-pill side">REST adapter</span></h3>
+          <p>Uses <code>https://computers.globalwarningnetworks.com</code> (client adapter). <code>computer.globalwarningnetworks.com</code> public TLS is broken — we do not change the VPS.</p>
+          <label class="settings-field">Base URL
+            <input id="mcp-computer-url" type="text" spellcheck="false"/>
+          </label>
+          <label class="settings-field">Bot name
+            <input id="mcp-computer-bot" type="text" spellcheck="false" placeholder="e.g. omi"/>
+          </label>
+          <label class="settings-field">Bot secret
+            <div class="settings-field row">
+              <input id="mcp-computer-secret" type="password" autocomplete="off" spellcheck="false"/>
+              <button type="button" class="settings-btn ghost" id="tog-mcp-computer">Show</button>
+            </div>
+          </label>
+          <div class="settings-field row">
+            <button class="settings-btn primary" id="save-mcp-computer">Save Computer</button>
+            <button class="settings-btn" id="test-mcp-computer">Test</button>
+            <span id="mcp-computer-status" class="settings-status">—</span>
+          </div>
+        </div>
+      </div>`;
+
+    const keys = await api.getKeys();
+    const su = page.querySelector('#mcp-search-url') as HTMLInputElement;
+    const sk = page.querySelector('#mcp-search-key') as HTMLInputElement;
+    const cu = page.querySelector('#mcp-computer-url') as HTMLInputElement;
+    const cb = page.querySelector('#mcp-computer-bot') as HTMLInputElement;
+    const cs = page.querySelector('#mcp-computer-secret') as HTMLInputElement;
+    if (su) su.value = keys.mcpSearchUrl || keys.mcp_search_url || 'https://search.globalwarningnetworks.com/mcp';
+    if (sk) sk.value = keys.mcpSearchKey || keys.mcp_search_key || '';
+    if (cu) cu.value = keys.mcpComputerUrl || keys.mcp_computer_url || 'https://computers.globalwarningnetworks.com';
+    if (cb) cb.value = keys.mcpComputerBot || keys.mcp_computer_bot || '';
+    if (cs) cs.value = keys.mcpComputerSecret || keys.mcp_computer_secret || '';
+
+    const stSearch = page.querySelector('#mcp-search-status') as HTMLElement;
+    const stComp = page.querySelector('#mcp-computer-status') as HTMLElement;
+    try {
+      const st = await api.mcpStatus();
+      if (stSearch) stSearch.textContent = st.search?.configured ? 'Key saved' : 'Not configured';
+      if (stComp) stComp.textContent = st.computer?.configured ? 'Credentials saved' : 'Not configured';
+      if (st.search?.configured) stSearch?.classList.add('ok');
+      if (st.computer?.configured) stComp?.classList.add('ok');
+    } catch {}
+
+    const bindToggle = (btn: string, input: string) => {
+      page.querySelector(btn)?.addEventListener('click', () => {
+        const el = page.querySelector(input) as HTMLInputElement;
+        if (!el) return;
+        el.type = el.type === 'password' ? 'text' : 'password';
+      });
+    };
+    bindToggle('#tog-mcp-search', '#mcp-search-key');
+    bindToggle('#tog-mcp-computer', '#mcp-computer-secret');
+
+    page.querySelector('#save-mcp-search')?.addEventListener('click', async () => {
+      try {
+        await api.setKeys({
+          mcp_search_url: (page.querySelector('#mcp-search-url') as HTMLInputElement).value.trim(),
+          mcp_search_key: (page.querySelector('#mcp-search-key') as HTMLInputElement).value.trim(),
+        });
+        if (stSearch) { stSearch.textContent = 'Saved'; stSearch.classList.add('ok'); }
+      } catch (e: any) {
+        if (stSearch) stSearch.textContent = e.message || String(e);
+      }
+    });
+    page.querySelector('#save-mcp-computer')?.addEventListener('click', async () => {
+      try {
+        await api.setKeys({
+          mcp_computer_url: (page.querySelector('#mcp-computer-url') as HTMLInputElement).value.trim(),
+          mcp_computer_bot: (page.querySelector('#mcp-computer-bot') as HTMLInputElement).value.trim(),
+          mcp_computer_secret: (page.querySelector('#mcp-computer-secret') as HTMLInputElement).value.trim(),
+        });
+        if (stComp) { stComp.textContent = 'Saved'; stComp.classList.add('ok'); }
+      } catch (e: any) {
+        if (stComp) stComp.textContent = e.message || String(e);
+      }
+    });
+    page.querySelector('#test-mcp-search')?.addEventListener('click', async () => {
+      if (stSearch) stSearch.textContent = 'Testing…';
+      try {
+        const r = await api.mcpTest('search');
+        if (stSearch) {
+          stSearch.textContent = r.ok ? `OK · ${(r.tools || []).join(', ') || 'connected'}` : (r.detail || 'failed');
+          stSearch.classList.toggle('ok', !!r.ok);
+        }
+      } catch (e: any) {
+        if (stSearch) { stSearch.textContent = e.message || String(e); stSearch.classList.remove('ok'); }
+      }
+    });
+    page.querySelector('#test-mcp-computer')?.addEventListener('click', async () => {
+      if (stComp) stComp.textContent = 'Testing…';
+      try {
+        const r = await api.mcpTest('computer');
+        if (stComp) {
+          stComp.textContent = r.ok ? `OK · bot ${r.bot || ''}` : (r.detail || 'failed');
+          stComp.classList.toggle('ok', !!r.ok);
+        }
+      } catch (e: any) {
+        if (stComp) { stComp.textContent = e.message || String(e); stComp.classList.remove('ok'); }
+      }
+    });
   }
 
   private async paintProviders(page: Element) {

@@ -39,6 +39,18 @@ pub struct ProviderKeys {
     /// NVIDIA small-task / classify model
     #[serde(default = "default_side_model")]
     pub nvidia_side_model: String,
+    /// GWN Search MCP Bearer key
+    #[serde(default)]
+    pub mcp_search_key: Option<String>,
+    #[serde(default)]
+    pub mcp_search_url: Option<String>,
+    /// OmniBots computer bot name + secret (REST adapter)
+    #[serde(default)]
+    pub mcp_computer_bot: Option<String>,
+    #[serde(default)]
+    pub mcp_computer_secret: Option<String>,
+    #[serde(default)]
+    pub mcp_computer_url: Option<String>,
 }
 
 fn default_max_agents() -> u32 { 3 }
