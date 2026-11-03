@@ -1,0 +1,9 @@
+OMNI-CODE Gateway v1.1.0 — PE resource dump (llvm-readobj --coff-resources)
+
+Type: ICON (ID 3) / Name: (ID 1) — bitmap icon data present
+Type: GROUP_ICON (ID 14) / Name: (ID 1) — main application icon group (resource ID 1)
+Type: VERSIONINFO (ID 16) / Name: (ID 1) — FileDescription: OMNI-CODE Gateway, ProductVersion 1.1.0
+Type: MANIFEST (ID 24) / Name: (ID 1) — identity OMNI-CODE.Gateway
+
+Gateway loads ResIdInt(1) for WM_SETICON ICON_SZ_BIG + ICON_SZ_SMALL and ClassIconId(1).
+omni-core uses with_window_icon + with_taskbar_icon from omni-icon-256.png.

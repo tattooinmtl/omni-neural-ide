@@ -3,6 +3,7 @@
 mod guardrails;
 mod fsapi;
 mod ai;
+mod pool;
 mod harness;
 mod state;
 mod tts;
@@ -162,6 +163,10 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/fs/tree", get(fsapi::tree))
         .route("/api/fs/delete", post(fsapi::delete_path))
         .route("/api/chat", post(ai::chat))
+        .route("/api/omni/chat", post(ai::omni_chat))
+        .route("/api/omni/volunteer", post(ai::omni_volunteer))
+        .route("/api/embed", post(ai::embed))
+        .route("/api/side", post(ai::side_task))
         .route("/api/slash", post(harness::slash))
         .route("/api/tts", post(tts::tts))
         .route("/api/harness/run", post(harness::run_loop))

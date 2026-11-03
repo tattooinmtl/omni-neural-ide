@@ -46,9 +46,16 @@ export const api = {
       body: JSON.stringify({ cmd, args }),
     }),
   config: () => req<{ mode: Mode; projectRoot: string | null; models: string[]; hasMinimax: boolean; hasNvidia: boolean }>('/api/config'),
-  getKeys: () => req<{ minimax: string; nvidia: string; hasMinimax: boolean; hasNvidia: boolean }>('/api/keys'),
-  setKeys: (minimax?: string, nvidia?: string) =>
-    req<{ ok: boolean }>('/api/keys', { method: 'POST', body: JSON.stringify({ minimax, nvidia }) }),
+  getKeys: () => req<any>('/api/keys'),
+  setKeys: (body: Record<string, unknown>) =>
+    req<{ ok: boolean }>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
+  omniChat: (message: string) =>
+    req<{ content: string; model: string }>('/api/omni/chat', { method: 'POST', body: JSON.stringify({ message }) }),
+  omniVolunteer: (input: string) =>
+    req<{ content: string; model: string }>('/api/omni/volunteer', { method: 'POST', body: JSON.stringify({ task: 'volunteer', input }) }),
+  embed: (texts: string[]) =>
+    req<{ vectors: number[][]; model: string; skipped: boolean }>('/api/embed', { method: 'POST', body: JSON.stringify({ texts }) }),
+
 };
 
 export function langFromPath(p: string): string {

@@ -1,6 +1,6 @@
 {
   "name": "omni-build",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Desktop AI coding harness. **No Electron.** Go launcher → Rust core → native/webview UI.",
   "main": "index.js",
   "scripts": {

@@ -1,0 +1,7 @@
+{
+  "omniEnterSends": true,
+  "chatEnterInsertsNewline": true,
+  "chatCtrlEnterSends": true,
+  "chatValSample": "\"line1\\nline2\"",
+  "omniValAfterEnter": ""
+}

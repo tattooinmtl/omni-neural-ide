@@ -66,7 +66,7 @@ export class ChatPanel {
       <div class="chat-messages" id="chat-msgs"></div>
       <div class="chat-input-area">
         <div class="chat-input-row">
-          <textarea id="chat-input" rows="2" placeholder="${this.mode === 'ultra' ? 'Ask anything about your code...' : 'Ask OMNI-CODE something...'}"></textarea>
+          <textarea id="chat-input" enterkeyhint="enter" rows="2" placeholder="${this.mode === 'ultra' ? 'Ask anything about your code...' : 'Ask OMNI-CODE something...'}"></textarea>
           <button class="send-btn" id="chat-send" title="Send">${svg.send}</button>
         </div>
         <div class="chat-actions">
@@ -106,9 +106,24 @@ export class ChatPanel {
     const input = this.el.querySelector('#chat-input') as HTMLTextAreaElement;
     const send = () => this.send(input.value);
     this.el.querySelector('#chat-send')?.addEventListener('click', send);
+    // Coding chat: Enter = newline (editor-like). Send only via button or Ctrl/Cmd+Enter.
     input?.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      if (e.isComposing || (e as any).keyCode === 229) return;
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+        send();
+        return;
+      }
+      // Never preventDefault on plain Enter — allow newline. Block accidental form submit higher up.
     });
+    input?.addEventListener('keypress', e => {
+      // Extra safeguard: some browsers fire submit on Enter in forms
+      if (e.key === 'Enter' && !(e as KeyboardEvent).ctrlKey && !(e as KeyboardEvent).metaKey) {
+        e.stopPropagation();
+      }
+    });
+    input?.setAttribute('enterkeyhint', 'enter');
     this.el.querySelector('#clear-chat')?.addEventListener('click', () => this.clear());
     this.el.querySelector('[data-act="model"]')?.addEventListener('click', () => {
       const opts = ['Omni Ultra 1.2', 'MiniMax M3.1 Flash', 'NVIDIA Nemotron 3.5'];

@@ -1,5 +1,6 @@
-// OMNI-CODE native Win32 splash launcher — custom-painted, no browser, no white chrome.
-// paintSplash leaves room for a future face-animation overlay above the controls.
+//go:build windows
+
+// OMNI-CODE Gateway — native Win32 splash, custom-painted, no browser, no white chrome.
 package main
 
 import (
@@ -19,8 +20,6 @@ import (
 //go:embed embed/omni-logo.bmp
 var logoFS embed.FS
 
-const version = "1.0.3"
-
 // Brand green (#00FF88) and navy matching the logo plate.
 var colorGreen = win.RGB(0x00, 0xff, 0x88)
 var colorGreenDim = win.RGB(0x00, 0xc0, 0x66)
@@ -37,10 +36,12 @@ type splashState struct {
 	bgW, bgH   int
 	fontTitle  win.HFONT
 	fontBody   win.HFONT
+	fontSmall  win.HFONT
 	resultOK   bool
 	resultMode string
 	install    string
 	logf       *os.File
+	status     string // green update/status line
 }
 
 func main() {
@@ -49,11 +50,11 @@ func main() {
 	for _, d := range []string{"keys", "sandbox", "bin", "logs", "assets"} {
 		_ = os.MkdirAll(filepath.Join(install, d), 0o755)
 	}
-	logPath := filepath.Join(install, "logs", "launcher.log")
+	logPath := filepath.Join(install, "logs", "gateway.log")
 	logf, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if logf != nil {
 		defer logf.Close()
-		fmt.Fprintf(logf, "\n==== launcher %s start %s install=%s ====\n", version, time.Now().Format(time.RFC3339), install)
+		fmt.Fprintf(logf, "\n==== gateway %s start %s install=%s ====\n", version, time.Now().Format(time.RFC3339), install)
 	}
 	log := func(format string, args ...any) {
 		if logf != nil {
@@ -108,10 +109,15 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 	if f, err := win.CreateFontIndirect(&lf); err == nil {
 		st.fontBody = f
 	}
+	lf.Height = -13
+	if f, err := win.CreateFontIndirect(&lf); err == nil {
+		st.fontSmall = f
+	}
 
 	brush, _ := win.CreateBrushIndirect(&win.LOGBRUSH{Style: co.BRS_SOLID, Color: colorNavy})
 	opts := ui.OptsMain().
-		Title("OMNI-CODE Launcher " + version).
+		Title("OMNI-CODE Gateway").
+		ClassIconId(1).
 		Size(ui.Dpi(560, 560)).
 		Center(true)
 	if brush != 0 {
@@ -119,6 +125,11 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 	}
 	st.wnd = ui.NewMain(opts)
 
+	st.wnd.On().WmCreate(func(_ ui.WmCreate) int {
+		applyDarkCaption(st.wnd.Hwnd())
+		applyWindowIcons(st.wnd.Hwnd())
+		return 0
+	})
 	st.wnd.On().WmEraseBkgnd(func(_ ui.WmEraseBkgnd) int { return 1 })
 	st.wnd.On().WmPaint(func() { st.paintSplash() })
 	st.wnd.On().WmMouseMove(func(p ui.WmMouse) {
@@ -152,6 +163,35 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 		}
 	})
 
+	// Show window first so status line is visible during update check.
+	_ = st.wnd.Hwnd().ShowWindow(co.SW_SHOW)
+	_ = st.wnd.Hwnd().UpdateWindow()
+	applyDarkCaption(st.wnd.Hwnd())
+	applyWindowIcons(st.wnd.Hwnd())
+
+	setStatus := func(s string) {
+		st.status = s
+		_ = st.wnd.Hwnd().InvalidateRect(nil, false)
+		_ = st.wnd.Hwnd().UpdateWindow()
+		// Pump a few messages so paint runs
+		var msg win.MSG
+		for i := 0; i < 8; i++ {
+			ok := win.PeekMessage(&msg, win.HWND(0), 0, 0, co.PM_REMOVE)
+			if !ok {
+				break
+			}
+			_ = win.TranslateMessage(&msg)
+			_ = win.DispatchMessage(&msg)
+		}
+	}
+	if checkAndApplyUpdate(install, setStatus, log) {
+		log("exiting for silent setup upgrade")
+		_ = st.wnd.Hwnd().DestroyWindow()
+		st.resultOK = false
+		return st
+	}
+	writeVersionFile(install, version)
+
 	st.wnd.RunAsMain()
 	if st.bgBmp != 0 {
 		_ = st.bgBmp.DeleteObject()
@@ -161,6 +201,9 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 	}
 	if st.fontBody != 0 {
 		_ = st.fontBody.DeleteObject()
+	}
+	if st.fontSmall != 0 {
+		_ = st.fontSmall.DeleteObject()
 	}
 	return st
 }
@@ -189,8 +232,8 @@ func (st *splashState) layoutRegions(cx, cy int) (logoDest, title, plain, ultra,
 	pad := 28
 	gap := 14
 
-	// Reserve bottom controls: title(~28) + radios(40) + gap + buttons(48) + gap + footer(24) + pads
-	controlsH := 28 + gap + 40 + gap + 48 + gap + 22 + pad
+	// Reserve bottom controls: title(~28) + radios(40) + gap + buttons(48) + gap + status(20) + footer(22) + pads
+	controlsH := 28 + gap + 40 + gap + 48 + gap + 20 + gap + 22 + pad
 	logoAreaH := cy - controlsH - pad
 	if logoAreaH < 180 {
 		logoAreaH = 180
@@ -316,8 +359,18 @@ func (st *splashState) paintSplash() {
 	st.paintButton(hdc, launch, "Launch", st.hover == 3)
 	st.paintButton(hdc, cancel, "Exit", st.hover == 4)
 
+	if st.status != "" {
+		if st.fontSmall != 0 {
+			_, _ = hdc.SelectObjectFont(st.fontSmall)
+		}
+		_, _ = hdc.SetTextColor(colorGreen)
+		_ = hdc.TextOut(int(footer.Left), int(footer.Top)-18, st.status)
+	}
+	if st.fontSmall != 0 {
+		_, _ = hdc.SelectObjectFont(st.fontSmall)
+	}
 	_, _ = hdc.SetTextColor(colorGreenDim)
-	_ = hdc.TextOut(int(footer.Left), int(footer.Top), "v"+version+"  ·  "+st.install)
+	_ = hdc.TextOut(int(footer.Left), int(footer.Top), "v"+version+"  ·  OMNI-CODE Gateway  ·  "+st.install)
 }
 
 func (st *splashState) paintChoice(hdc win.HDC, r win.RECT, label string, selected, hover bool) {
@@ -495,5 +548,26 @@ func findCore(install string) string {
 }
 
 func msgBox(text string) {
-	_, _ = win.HWND(0).MessageBox(text, "OMNI-CODE Launcher", co.MB_ICONERROR)
+	_, _ = win.HWND(0).MessageBox(text, "OMNI-CODE Gateway", co.MB_ICONERROR)
+}
+
+
+func applyDarkCaption(hwnd win.HWND) {
+	_ = hwnd.DwmSetWindowAttribute(win.DwmAttrUseImmersiveDarkMode(true))
+	_ = hwnd.DwmSetWindowAttribute(win.DwmAttrCaptionColor(colorNavy))
+	_ = hwnd.DwmSetWindowAttribute(win.DwmAttrTextColor(colorGreen))
+	_ = hwnd.DwmSetWindowAttribute(win.DwmAttrBorderColor(colorNavy))
+}
+
+func applyWindowIcons(hwnd win.HWND) {
+	hInst, _ := win.GetModuleHandle("")
+	// Resource ID 1 = main icon group from go-winres
+	big, err1 := hInst.LoadImage(win.ResIdInt(1), co.IMAGE_ICON, 32, 32, co.LR_DEFAULTCOLOR|co.LR_SHARED)
+	small, err2 := hInst.LoadImage(win.ResIdInt(1), co.IMAGE_ICON, 16, 16, co.LR_DEFAULTCOLOR|co.LR_SHARED)
+	if err1 == nil && big != 0 {
+		_, _ = hwnd.SendMessage(co.WM_SETICON, win.WPARAM(co.ICON_SZ_BIG), win.LPARAM(big))
+	}
+	if err2 == nil && small != 0 {
+		_, _ = hwnd.SendMessage(co.WM_SETICON, win.WPARAM(co.ICON_SZ_SMALL), win.LPARAM(small))
+	}
 }

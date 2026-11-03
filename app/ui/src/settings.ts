@@ -5,7 +5,7 @@ const CATEGORIES = [
   { id: 'appearance', label: 'Appearance / Theme' },
   { id: 'editor', label: 'Editor' },
   { id: 'providers', label: 'Providers' },
-  { id: 'assistant', label: 'Assistant' },
+  { id: 'assistant', label: 'Omni the Presence' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'shortcuts', label: 'Shortcuts' },
   { id: 'about', label: 'About' },
@@ -78,7 +78,7 @@ export class SettingsView {
         break;
       case 'general':
         page.innerHTML = `<h2>General</h2>
-          <p class="settings-hint">Launch mode is chosen in the native launcher each start.</p>
+          <p class="settings-hint">Launch mode is chosen in the OMNI-CODE Gateway each start.</p>
           <label class="settings-field">Default project folder<input id="set-project" placeholder="%USERPROFILE%\\Projects" /></label>`;
         break;
       case 'appearance':
@@ -96,10 +96,11 @@ export class SettingsView {
           <label class="settings-field"><input type="checkbox" checked/> Minimap</label>`;
         break;
       case 'assistant':
-        page.innerHTML = `<h2>Assistant</h2>
-          <p class="settings-hint">Floating face assistant (moods / TTS). Voice uses MiniMax TTS when a key is set under Providers.</p>
-          <label class="settings-field"><input type="checkbox" checked/> Show floating face</label>
-          <label class="settings-field"><input type="checkbox" checked/> Speak replies</label>`;
+        page.innerHTML = `<h2>Omni the Presence</h2>
+          <p class="settings-hint">Omni is a separate entity from the coding chat — watching, joking, commenting. MiniMax powers his voice &amp; chat. NVIDIA can tag moods when available.</p>
+          <label class="settings-field"><input type="checkbox" id="set-omni-show" checked/> Show Omni window</label>
+          <label class="settings-field"><input type="checkbox" id="set-omni-speak" checked/> Speak replies (TTS)</label>
+          <label class="settings-field"><input type="checkbox" id="set-omni-volunteer" checked/> Occasional volunteer remarks</label>`;
         break;
       case 'notifications':
         page.innerHTML = `<h2>Notifications</h2>
@@ -116,8 +117,8 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.0.3</p>
-          <p class="settings-hint">Go launcher → Rust core → native WebView2. No Electron.</p>
+          <p><strong>OMNI-CODE</strong> v1.1.0</p>
+          <p class="settings-hint">Go Gateway → Rust core → native WebView2. No Electron.</p>
           <p class="settings-hint">Install: %USERPROFILE%\\.omni-neural-ide</p>`;
         break;
     }
@@ -127,25 +128,46 @@ export class SettingsView {
     page.innerHTML = `<h2>Providers</h2>
       <p class="settings-hint">API keys stay on this machine under keys\\providers.json. Changes apply without relaunch.</p>
       <div class="settings-providers">
-        <label class="settings-field">MiniMax API key
-          <div class="settings-secret">
-            <input id="set-minimax" type="password" autocomplete="off" spellcheck="false"/>
-            <button type="button" id="tog-minimax" class="settings-btn ghost">Show</button>
-          </div>
-        </label>
-        <label class="settings-field">NVIDIA API key
-          <div class="settings-secret">
-            <input id="set-nvidia" type="password" autocomplete="off" spellcheck="false"/>
-            <button type="button" id="tog-nvidia" class="settings-btn ghost">Show</button>
-          </div>
-        </label>
-        <label class="settings-field">Preferred model
-          <select id="set-model">
-            <option>Omni Ultra 1.2</option>
-            <option>MiniMax M3.1 Flash</option>
-            <option>NVIDIA Nemotron 3.5</option>
-          </select>
-        </label>
+        <div class="settings-role">
+          <h3>MiniMax <span class="role-pill">Main brain</span></h3>
+          <p class="settings-hint">Powers Omni the Presence, the coding chat, and concurrent agents.</p>
+          <label class="settings-field">MiniMax API key
+            <div class="settings-secret">
+              <input id="set-minimax" type="password" autocomplete="off" spellcheck="false"/>
+              <button type="button" id="tog-minimax" class="settings-btn ghost">Show</button>
+            </div>
+          </label>
+          <label class="settings-field">Concurrent agents (pool)
+            <select id="set-max-agents">
+              <option value="3">3 (default)</option>
+              <option value="4">4 (max)</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+          </label>
+        </div>
+        <div class="settings-role">
+          <h3>NVIDIA <span class="role-pill side">Embeddings &amp; side tasks</span></h3>
+          <p class="settings-hint">Indexing, short classify/summarize, mood tags. Optional — skipped if no key.</p>
+          <label class="settings-field">NVIDIA API key
+            <div class="settings-secret">
+              <input id="set-nvidia" type="password" autocomplete="off" spellcheck="false"/>
+              <button type="button" id="tog-nvidia" class="settings-btn ghost">Show</button>
+            </div>
+          </label>
+          <label class="settings-field">Embedding model
+            <select id="set-embed-model">
+              <option>nvidia/nv-embedqa-e5-v5</option>
+              <option>nvidia/llama-3.2-nv-embedqa-1b-v2</option>
+            </select>
+          </label>
+          <label class="settings-field">Small-task model
+            <select id="set-side-model">
+              <option>nvidia/nemotron-mini-4b-instruct</option>
+              <option>nvidia/nemotron-3-nano-3b-instruct</option>
+            </select>
+          </label>
+        </div>
         <div class="settings-actions">
           <button class="settings-btn primary" id="save-providers">Save</button>
           <span id="providers-status" class="settings-status"></span>
@@ -158,6 +180,12 @@ export class SettingsView {
       const nv = page.querySelector('#set-nvidia') as HTMLInputElement;
       if (mm) mm.value = keys.minimax || '';
       if (nv) nv.value = keys.nvidia || '';
+      const max = page.querySelector('#set-max-agents') as HTMLSelectElement;
+      if (max && keys.maxAgents) max.value = String(keys.maxAgents);
+      const emb = page.querySelector('#set-embed-model') as HTMLSelectElement;
+      if (emb && keys.nvidiaEmbedModel) emb.value = keys.nvidiaEmbedModel;
+      const side = page.querySelector('#set-side-model') as HTMLSelectElement;
+      if (side && keys.nvidiaSideModel) side.value = keys.nvidiaSideModel;
     } catch {
       /* offline / demo */
     }
@@ -179,9 +207,12 @@ export class SettingsView {
     page.querySelector('#save-providers')?.addEventListener('click', async () => {
       const minimax = (page.querySelector('#set-minimax') as HTMLInputElement).value.trim();
       const nvidia = (page.querySelector('#set-nvidia') as HTMLInputElement).value.trim();
+      const max_agents = Number((page.querySelector('#set-max-agents') as HTMLSelectElement).value);
+      const nvidia_embed_model = (page.querySelector('#set-embed-model') as HTMLSelectElement).value;
+      const nvidia_side_model = (page.querySelector('#set-side-model') as HTMLSelectElement).value;
       const status = page.querySelector('#providers-status')!;
       try {
-        await api.setKeys(minimax || undefined, nvidia || undefined);
+        await api.setKeys({ minimax, nvidia, max_agents, nvidia_embed_model, nvidia_side_model });
         status.textContent = 'Saved';
         status.className = 'settings-status ok';
       } catch (e: any) {

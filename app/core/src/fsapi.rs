@@ -50,6 +50,9 @@ pub async fn config(State(st): S) -> Json<ConfigOut> {
 pub struct KeysIn {
     pub minimax: Option<String>,
     pub nvidia: Option<String>,
+    pub max_agents: Option<u32>,
+    pub nvidia_embed_model: Option<String>,
+    pub nvidia_side_model: Option<String>,
 }
 
 
@@ -60,6 +63,9 @@ pub struct KeysOut {
     pub nvidia: String,
     pub has_minimax: bool,
     pub has_nvidia: bool,
+    pub max_agents: u32,
+    pub nvidia_embed_model: String,
+    pub nvidia_side_model: String,
 }
 
 pub async fn get_keys(State(st): S) -> Json<KeysOut> {
@@ -71,6 +77,17 @@ pub async fn get_keys(State(st): S) -> Json<KeysOut> {
         has_nvidia: !nv.is_empty(),
         minimax: mm,
         nvidia: nv,
+        max_agents: keys.max_agents.clamp(1, 4),
+        nvidia_embed_model: if keys.nvidia_embed_model.is_empty() {
+            "nvidia/nv-embedqa-e5-v5".into()
+        } else {
+            keys.nvidia_embed_model
+        },
+        nvidia_side_model: if keys.nvidia_side_model.is_empty() {
+            "nvidia/nemotron-mini-4b-instruct".into()
+        } else {
+            keys.nvidia_side_model
+        },
     })
 }
 
@@ -81,6 +98,16 @@ pub async fn set_keys(State(st): S, Json(body): Json<KeysIn>) -> Result<Json<ser
     }
     if let Some(v) = body.nvidia {
         if !v.is_empty() { keys.nvidia = Some(v); }
+    }
+    if let Some(v) = body.max_agents {
+        keys.max_agents = v.clamp(1, 4);
+        st.pool.set_max(keys.max_agents as usize).await;
+    }
+    if let Some(v) = body.nvidia_embed_model {
+        if !v.is_empty() { keys.nvidia_embed_model = v; }
+    }
+    if let Some(v) = body.nvidia_side_model {
+        if !v.is_empty() { keys.nvidia_side_model = v; }
     }
     save_keys(&st, &keys).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     *st.keys.write() = keys;

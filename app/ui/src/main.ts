@@ -9,7 +9,7 @@ import { ChatPanel, type FixtureMsg } from './chat';
 import { FloatingAssistant } from './assistant';
 import { BrainView } from './brain';
 import { HarnessController } from './harness';
-import { MOODS } from './moods';
+import { MOODS, nearestMood } from './moods';
 import { SettingsView } from './settings';
 
 const params = new URLSearchParams(location.search);
@@ -426,7 +426,11 @@ async function boot() {
   chat = new ChatPanel(document.getElementById('chat')!, mode);
   assistant = FloatingAssistant.create(document.getElementById('assistant-root')!);
   (assistant as any).moods = MOODS;
-  if (mode === 'ultra') setTimeout(() => assistant.greet(), 500);
+  setTimeout(() => assistant.greet(), 500);
+  // periodic presence remarks
+  setInterval(() => {
+    try { assistant.maybeVolunteer('User is coding in OMNI-CODE. Offer a short witty remark or stay silent.'); } catch {}
+  }, 90000);
   bindChrome();
   // Exact mock panel seams (activity|explorer|editor|chat)
   const side = document.getElementById('sidebar');

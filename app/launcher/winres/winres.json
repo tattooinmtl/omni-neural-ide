@@ -1,14 +1,19 @@
 {
   "RT_GROUP_ICON": {
-    "APP": {
-      "0000": ["../embed/omni.ico"]
+    "#1": {
+      "0000": [
+        "../embed/omni.ico"
+      ]
     }
   },
   "RT_MANIFEST": {
     "#1": {
       "0409": {
-        "identity": { "name": "OMNI-CODE.Launcher", "version": "1.0.2" },
-        "description": "OMNI-CODE Launcher",
+        "identity": {
+          "name": "OMNI-CODE.Gateway",
+          "version": "1.1.0"
+        },
+        "description": "OMNI-CODE Gateway",
         "minimum-os": "win7",
         "execution-level": "as invoker",
         "dpi-awareness": "system"
@@ -18,15 +23,19 @@
   "RT_VERSION": {
     "#1": {
       "0000": {
-        "fixed": { "file_version": "1.0.2.0", "product_version": "1.0.2.0" },
+        "fixed": {
+          "file_version": "1.1.0.0",
+          "product_version": "1.1.0.0"
+        },
         "info": {
           "0409": {
             "ProductName": "OMNI-CODE",
-            "FileDescription": "OMNI-CODE Launcher",
-            "ProductVersion": "1.0.2",
-            "FileVersion": "1.0.2",
+            "FileDescription": "OMNI-CODE Gateway",
+            "ProductVersion": "1.1.0",
+            "FileVersion": "1.1.0",
             "OriginalFilename": "launcher.exe",
-            "CompanyName": "tattooinmtl"
+            "CompanyName": "tattooinmtl",
+            "InternalName": "OMNI-CODE Gateway"
           }
         }
       }

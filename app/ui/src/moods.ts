@@ -2,8 +2,39 @@ export const MOODS = [
   'neutral','happy','focused','alert','calm','curious','excited','tired','proud','worried',
   'playful','serious','empathetic','confident','doubtful','inspired','bored','amused','frustrated','patient',
   'eager','reflective','mischievous','supportive','determined','surprised','grateful','nostalgic','vigilant','relaxed',
+  'angry','sad','joyful','crying','cold','talking',
 ] as const;
 export type Mood = typeof MOODS[number];
+
+/** Core portrait assets (~10). Remaining moods map to nearest. */
+export const CORE_MOODS = [
+  'neutral','surprised','cold','angry','joyful','sad','determined','crying','playful','focused','talking',
+] as const;
+
+const NEAREST: Record<string, string> = {
+  neutral: 'neutral',
+  happy: 'joyful', joyful: 'joyful', excited: 'joyful', proud: 'joyful', grateful: 'joyful', amused: 'joyful',
+  focused: 'focused', serious: 'focused', determined: 'determined', confident: 'determined', eager: 'determined', vigilant: 'focused',
+  alert: 'surprised', surprised: 'surprised', curious: 'playful',
+  calm: 'cold', cold: 'cold', tired: 'cold', bored: 'cold', relaxed: 'cold', patient: 'cold', reflective: 'cold',
+  worried: 'sad', sad: 'sad', empathetic: 'sad', doubtful: 'sad', nostalgic: 'sad',
+  playful: 'playful', mischievous: 'playful',
+  angry: 'angry', frustrated: 'angry',
+  crying: 'crying',
+  inspired: 'determined', supportive: 'playful', talking: 'talking',
+};
+
+export function nearestMood(mood: string): string {
+  const k = (mood || 'neutral').toLowerCase().trim();
+  return NEAREST[k] || 'neutral';
+}
+
+export function moodPortrait(mood: string): string {
+  const m = nearestMood(mood);
+  return `/omni-presence/${m}.jpg`;
+}
+
+// Legacy color map kept for any leftover Three.js paths
 export const moodColor: Record<string, number> = {
   neutral:0x1a3040,happy:0x1a4030,focused:0x1a2848,alert:0x402020,calm:0x1a3840,
   curious:0x2a3050,excited:0x403050,tired:0x202030,proud:0x304020,worried:0x403828,
@@ -11,4 +42,5 @@ export const moodColor: Record<string, number> = {
   inspired:0x384060,bored:0x222830,amused:0x384030,frustrated:0x482028,patient:0x283840,
   eager:0x305040,reflective:0x283050,mischievous:0x403848,supportive:0x204848,determined:0x283858,
   surprised:0x484028,grateful:0x304838,nostalgic:0x383040,vigilant:0x402838,relaxed:0x204040,
+  angry:0x501010,sad:0x203040,joyful:0x204030,crying:0x304050,cold:0x1a2838,talking:0x1a3040,
 };

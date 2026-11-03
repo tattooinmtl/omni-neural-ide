@@ -1,4 +1,5 @@
 use crate::guardrails;
+use crate::pool::AgentPool;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -19,13 +20,29 @@ pub struct AppState {
     pub tree: RwLock<Option<TreeNode>>,
     pub keys: RwLock<ProviderKeys>,
     pub rate: RwLock<RateCounters>,
+    pub pool: AgentPool,
+    /// Separate Omni the Presence chat history
+    pub omni_history: RwLock<Vec<(String,String)>>,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct ProviderKeys {
     pub minimax: Option<String>,
     pub nvidia: Option<String>,
+    /// Max concurrent MiniMax agents (1..=4). Default 3.
+    #[serde(default = "default_max_agents")]
+    pub max_agents: u32,
+    /// NVIDIA embedding model id
+    #[serde(default = "default_embed_model")]
+    pub nvidia_embed_model: String,
+    /// NVIDIA small-task / classify model
+    #[serde(default = "default_side_model")]
+    pub nvidia_side_model: String,
 }
+
+fn default_max_agents() -> u32 { 3 }
+fn default_embed_model() -> String { "nvidia/nv-embedqa-e5-v5".into() }
+fn default_side_model() -> String { "nvidia/nemotron-mini-4b-instruct".into() }
 
 #[derive(Default)]
 pub struct RateCounters {
@@ -38,6 +55,7 @@ pub struct RateCounters {
 impl AppState {
     pub fn new(mode: &str, data_dir: PathBuf, project: Option<PathBuf>) -> anyhow::Result<Self> {
         let keys = load_keys(&data_dir);
+        let max_agents = keys.max_agents.clamp(1, 4) as usize;
         let state = Self {
             mode: RwLock::new(mode.to_string()),
             data_dir,
@@ -45,6 +63,8 @@ impl AppState {
             tree: RwLock::new(None),
             keys: RwLock::new(keys),
             rate: RwLock::new(RateCounters::default()),
+            pool: AgentPool::new(max_agents),
+            omni_history: RwLock::new(Vec::new()),
         };
         if let Some(p) = project {
             state.open_project(&p)?;
