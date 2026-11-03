@@ -37,10 +37,18 @@ func main() {
 	}
 	fmt.Println("Starting fresh core:", core)
 
-	uiDir := filepath.Join(filepath.Dir(core), "..", "ui", "dist")
-	if _, err := os.Stat(filepath.Join(uiDir, "index.html")); err != nil {
-		// try relative to launcher source layout
-		uiDir = filepath.Join(besideLauncher(), "..", "ui", "dist")
+	uiCandidates := []string{
+		filepath.Join(filepath.Dir(core), "..", "ui", "dist"),
+		filepath.Join(install, "ui", "dist"),
+		filepath.Join(besideLauncher(), "..", "ui", "dist"),
+		filepath.Join(besideLauncher(), "ui", "dist"),
+	}
+	uiDir := uiCandidates[0]
+	for _, c := range uiCandidates {
+		if _, err := os.Stat(filepath.Join(c, "index.html")); err == nil {
+			uiDir = c
+			break
+		}
 	}
 	uiDir, _ = filepath.Abs(uiDir)
 
@@ -67,8 +75,20 @@ func installRoot() string {
 	if v := os.Getenv("OMNI_HOME"); v != "" {
 		return v
 	}
+	// Installer layout: <root>/bin/launcher.exe + <root>/ui/dist
+	beside := besideLauncher()
+	if filepath.Base(beside) == "bin" {
+		parent := filepath.Dir(beside)
+		if _, err := os.Stat(filepath.Join(parent, "ui", "dist", "index.html")); err == nil {
+			return parent
+		}
+	}
 	if runtime.GOOS == "windows" {
-		return `C:\Users\ThePa\.omni-neural-ide`
+		if local := os.Getenv("LOCALAPPDATA"); local != "" {
+			return filepath.Join(local, "Programs", "OMNI-CODE")
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".omni-neural-ide")
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".omni-neural-ide")
