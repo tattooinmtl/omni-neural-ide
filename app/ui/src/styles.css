@@ -337,3 +337,6 @@ html.shot .sidebar,html.shot .chat{flex-shrink:0}
 .avatar-pick{display:flex;gap:8px}
 .avatar-pick button{flex:1;padding:8px;border-radius:8px;border:1px solid #1e3a4a;background:#061018;color:#9ad;cursor:pointer}
 .avatar-pick button.active{border-color:#00ff88;color:#00ff88}
+
+.asst-digital{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;mix-blend-mode:screen}
+.asst-face-wrap.digital-mode .asst-face.talk-layer{display:none!important}

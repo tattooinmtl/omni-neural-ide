@@ -30,8 +30,12 @@ export function nearestMood(mood: string): string {
   return NEAREST[k] || 'neutral';
 }
 
-export function moodPortrait(mood: string, avatar: AvatarId = 'female'): string {
+export function moodPortrait(mood: string, avatar: AvatarId = 'female', faceMode: 'classic' | 'digital' = 'digital'): string {
   const m = nearestMood(mood);
+  if (faceMode === 'digital') {
+    // one clean digital base per avatar; mood comes from LED layers
+    return avatar === 'male' ? '/omni-presence/digital/male/neutral.jpg' : '/omni-presence/digital/neutral.jpg';
+  }
   if (avatar === 'male') return `/omni-presence/male/${m}.jpg`;
   return `/omni-presence/${m}.jpg`;
 }

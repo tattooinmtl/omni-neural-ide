@@ -15,6 +15,10 @@ export type OmniConfig = {
   volunteer: boolean;
   avatar: AvatarId;
   autoCheckUpdates: boolean;
+  faceMode: 'classic' | 'digital';
+  effectIntensity: number;
+  pixelSize: number;
+  eyeColorOverride: string;
   // Intelligence
   reasoningDepth: 'off' | 'low' | 'medium' | 'high';
   responseLength: 'short' | 'medium' | 'long';
@@ -80,6 +84,10 @@ export function defaultOmniConfig(): OmniConfig {
     voiceId: VOICE_IDS.female,
     avatar: 'female',
     autoCheckUpdates: true,
+    faceMode: 'digital',
+    effectIntensity: 0.85,
+    pixelSize: 3,
+    eyeColorOverride: '',
     preset: 'chill',
     tone: 0.35,
     humor: 0.45,

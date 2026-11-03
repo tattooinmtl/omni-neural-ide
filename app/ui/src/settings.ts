@@ -125,7 +125,7 @@ export class SettingsView {
         break;
       case 'about':
         page.innerHTML = `<h2>About</h2>
-          <p><strong>OMNI-CODE</strong> v1.2.0</p>
+          <p><strong>OMNI-CODE</strong> v1.2.1</p>
           <p class="settings-hint">Go Gateway → Rust core → native WebView2. No Electron.</p>
           <p class="settings-hint">Install: %USERPROFILE%\.omni-neural-ide</p>
           <div class="settings-field" style="margin-top:12px">
@@ -171,6 +171,22 @@ export class SettingsView {
             <button type="button" id="avatar-male" class="${cfg.avatar==='male'?'active':''}">Male</button>
           </div>
           <p class="settings-hint">Switches face + voice together (MiniMax TTS; speechSynthesis fallback matches gender).</p>
+          <label class="settings-field">Face mode
+            <select id="omni-face-mode">
+              <option value="digital" ${(cfg.faceMode||'digital')==='digital'?'selected':''}>Digital (LED eyes + waveform mouth)</option>
+              <option value="classic" ${cfg.faceMode==='classic'?'selected':''}>Classic portrait</option>
+            </select>
+          </label>
+          <label class="settings-field">Effect intensity
+            <input type="range" id="omni-fx-intensity" min="0.2" max="1" step="0.05" value="${cfg.effectIntensity??0.85}"/>
+          </label>
+          <label class="settings-field">Pixel size
+            <input type="range" id="omni-pixel-size" min="2" max="8" step="1" value="${cfg.pixelSize??3}"/>
+          </label>
+          <label class="settings-field">Custom eye color (optional)
+            <input type="color" id="omni-eye-color" value="${cfg.eyeColorOverride||'#50dcff'}"/>
+            <button type="button" id="omni-eye-clear">Clear override</button>
+          </label>
         </div>
       </details>
 
@@ -381,7 +397,39 @@ export class SettingsView {
       this.paintOmniPresence(page);
     });
 
-    page.querySelector('#avatar-female')?.addEventListener('click', () => {
+    
+    page.querySelector('#omni-face-mode')?.addEventListener('change', (e) => {
+      const cfg = loadOmniConfig();
+      cfg.faceMode = (e.target as HTMLSelectElement).value as any;
+      saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.();
+    });
+    page.querySelector('#omni-fx-intensity')?.addEventListener('input', (e) => {
+      const cfg = loadOmniConfig();
+      cfg.effectIntensity = Number((e.target as HTMLInputElement).value);
+      saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.();
+    });
+    page.querySelector('#omni-pixel-size')?.addEventListener('input', (e) => {
+      const cfg = loadOmniConfig();
+      cfg.pixelSize = Number((e.target as HTMLInputElement).value);
+      saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.();
+    });
+    page.querySelector('#omni-eye-color')?.addEventListener('input', (e) => {
+      const cfg = loadOmniConfig();
+      cfg.eyeColorOverride = (e.target as HTMLInputElement).value;
+      saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.();
+    });
+    page.querySelector('#omni-eye-clear')?.addEventListener('click', () => {
+      const cfg = loadOmniConfig();
+      cfg.eyeColorOverride = '';
+      saveOmniConfig(cfg);
+      (window as any).__omniReloadConfig?.();
+      this.paintPage('assistant');
+    });
+page.querySelector('#avatar-female')?.addEventListener('click', () => {
       const cfg = loadOmniConfig(); cfg.avatar='female'; cfg.voiceId=VOICE_IDS.female; saveOmniConfig(cfg);
       (window as any).__omniReloadConfig?.(); this.paintPage('assistant');
     });

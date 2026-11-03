@@ -1,5 +1,6 @@
 import { api, ApiError } from './api';
 import { moodPortrait, mouthFrame, nearestMood, type AvatarId } from './moods';
+import { DigitalFace } from './digital-face';
 import { VOICE_IDS } from './omni-config';
 import { sanitizeForSpeech } from './speech';
 import { loadOmniConfig, personalitySystemPrompt, type OmniConfig } from './omni-config';
@@ -25,6 +26,7 @@ export class FloatingAssistant {
   lastRhythmFire = 0;
   cfg: OmniConfig = loadOmniConfig();
   audioCtx: AudioContext | null = null;
+  digitalFace: DigitalFace | null = null;
   // activity
   keyTimes: number[] = [];
   lastTypeAt = 0;
@@ -61,6 +63,10 @@ export class FloatingAssistant {
     a.faceB = root.querySelector('#asst-face-b') as HTMLImageElement;
     a.faceTalk = root.querySelector('#asst-face-talk') as HTMLImageElement;
     a.faceTalk.src = mouthFrame(2, (a.cfg.avatar || 'female') as AvatarId);
+    const wrap = root.querySelector('#asst-face-wrap') as HTMLElement;
+    a.digitalFace = new DigitalFace(wrap);
+    a.applyFaceMode();
+    (window as any).__omniAssistant = a;
     a.setMood('neutral', true);
     root.querySelector('#asst-close')?.addEventListener('click', () => a.hide());
     root.querySelector('#asst-omni-btn')?.addEventListener('click', () => a.togglePrompt());
@@ -95,7 +101,26 @@ export class FloatingAssistant {
     // Keep voice paired with avatar
     if (this.cfg.avatar === 'male' && this.cfg.voiceId === VOICE_IDS.female) this.cfg.voiceId = VOICE_IDS.male;
     if (this.cfg.avatar === 'female' && this.cfg.voiceId === VOICE_IDS.male) this.cfg.voiceId = VOICE_IDS.female;
+    this.applyFaceMode();
     this.setMood(this.mood || 'neutral', true);
+  }
+
+  applyFaceMode() {
+    const digital = (this.cfg.faceMode || 'digital') === 'digital';
+    const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement | null;
+    wrap?.classList.toggle('digital-mode', digital);
+    if (this.digitalFace) {
+      this.digitalFace.setOpts({
+        intensity: digital ? (this.cfg.effectIntensity ?? 0.85) : 0,
+        pixelSize: this.cfg.pixelSize ?? 3,
+        eyeColorOverride: this.cfg.eyeColorOverride || null,
+      });
+      if (digital) this.digitalFace.start();
+      else this.digitalFace.stop();
+    }
+    if (this.faceTalk) {
+      this.faceTalk.style.display = digital ? 'none' : '';
+    }
   }
 
   noteKey(e: KeyboardEvent) {
@@ -210,6 +235,7 @@ export class FloatingAssistant {
 
   beginThinking() {
     this.setMood('thinking');
+    this.digitalFace?.setState('thinking');
     this.setStatus('Thinking…');
     const lines = ['umm… ok!', 'umm… okay!', 'umm… still on it!', 'umm… ok, almost!'];
     void this.speak(lines[0]);
@@ -225,6 +251,7 @@ export class FloatingAssistant {
 
   endThinking() {
     if (this.thinkingTimer) { window.clearInterval(this.thinkingTimer); this.thinkingTimer = 0; }
+    this.digitalFace?.setState(this.talking ? 'talking' : 'idle');
   }
 
   appendLog(who: 'you' | 'omni', text: string) {
@@ -293,7 +320,9 @@ export class FloatingAssistant {
       return;
     }
     this.talking = true;
-    if (this.faceTalk) {
+    this.digitalFace?.setState('talking');
+    const digital = (this.cfg.faceMode || 'digital') === 'digital';
+    if (!digital && this.faceTalk) {
       if (!this.faceTalk.getAttribute('src')) this.faceTalk.src = '/omni-presence/talking.jpg';
       this.faceTalk.style.visibility = 'visible';
       this.faceTalk.style.opacity = '1';
@@ -310,6 +339,8 @@ export class FloatingAssistant {
     }
     window.setTimeout(() => {
       this.talking = false;
+      this.digitalFace?.setState('idle');
+      this.digitalFace?.setAnalyser(null);
       if (this.faceTalk) {
         this.faceTalk.style.opacity = '0';
         this.faceTalk.style.visibility = 'hidden';
@@ -340,9 +371,11 @@ export class FloatingAssistant {
     analyser.connect(this.audioCtx.destination);
     this.analyser = analyser;
     this.lipSource = src;
-    this.startLipSync();
+    this.digitalFace?.setAnalyser(analyser);
+    this.digitalFace?.setState('talking');
+    if ((this.cfg.faceMode || 'digital') !== 'digital') this.startLipSync();
     src.start();
-    src.onended = () => this.stopLipSync();
+    src.onended = () => { this.stopLipSync(); this.digitalFace?.setAnalyser(null); };
     return true;
   }
 
@@ -372,6 +405,11 @@ export class FloatingAssistant {
   }
 
   setMouthLevel(level: number) {
+    // Digital mode: drive synthetic envelope for speechSynthesis / classic unused
+    if ((this.cfg.faceMode || 'digital') === 'digital') {
+      this.digitalFace?.nudgeSynth(level / 3);
+      return;
+    }
     if (!this.faceTalk) return;
     const avatar = (this.cfg.avatar || 'female') as AvatarId;
     if (level <= 0) {
@@ -408,7 +446,9 @@ export class FloatingAssistant {
       };
       u.onend = () => { this.stopLipSync(); resolve(); };
       u.onerror = () => { this.stopLipSync(); resolve(); };
-      this.startLipSyncEstimate();
+      this.digitalFace?.setState('talking');
+      if ((this.cfg.faceMode || 'digital') !== 'digital') this.startLipSyncEstimate();
+      else this.startLipSyncEstimate(); // still nudges synth via setMouthLevel
       window.speechSynthesis.speak(u);
     });
   }
@@ -430,7 +470,8 @@ export class FloatingAssistant {
     const m = nearestMood(mood);
     this.mood = m;
     this.idleMood = m;
-    const src = moodPortrait(m, (this.cfg.avatar || 'female') as AvatarId);
+    this.digitalFace?.setMood(m);
+    const src = moodPortrait(m, (this.cfg.avatar || 'female') as AvatarId, (this.cfg.faceMode || 'digital') as any);
     if (this.moodFadeTimer) {
       window.clearTimeout(this.moodFadeTimer);
       this.moodFadeTimer = 0;
