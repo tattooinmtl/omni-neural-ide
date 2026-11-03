@@ -1,0 +1,4 @@
+[
+  {"role":"user","content":"How can I optimize the metrics fetch in api.ts for better caching and reduce load time?","time":"10:42 AM"},
+  {"role":"assistant","content":"I can help with that. Here's an optimized stale-while-revalidate approach.\n```typescript\nlet cache: Metrics | null = null;\nexport async function fetchMetrics() {\n  const fresh = fetch(\"/api/metrics\").then(r => r.json());\n  if (cache) { fresh.then(v => { cache = v; }); return cache; }\n  cache = await fresh; return cache;\n}\n```","time":"10:42 AM"}
+]

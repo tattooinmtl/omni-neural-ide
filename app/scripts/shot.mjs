@@ -1,43 +1,65 @@
 import { chromium } from 'playwright';
-import { createServer } from 'http';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
-import { extname, join } from 'path';
+import { spawn } from 'child_process';
+import { mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const dist = join(root, 'ui', 'dist');
 const shots = join(root, 'shots');
 mkdirSync(shots, { recursive: true });
-const mime = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.ttf':'font/ttf' };
-const server = createServer((req, res) => {
-  let p = req.url.split('?')[0];
-  if (p === '/') p = '/index.html';
-  const file = join(dist, decodeURIComponent(p));
-  if (!file.startsWith(dist) || !existsSync(file)) { res.writeHead(404); res.end('no'); return; }
-  res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream' });
-  res.end(readFileSync(file));
-});
-await new Promise(r => server.listen(8799, '127.0.0.1', r));
-const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-gpu', '--use-gl=swiftshader', '--force-device-scale-factor=1'] });
+const coreBin = join(root, 'dist', 'omni-core');
+const uiDir = join(root, 'ui', 'dist');
+const fixtures = join(root, 'fixtures');
 
-async function shot(mode) {
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function waitHealth(port, tries=80) {
+  for (let i=0;i<tries;i++) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/api/health`);
+      if (r.ok) return true;
+    } catch {}
+    await sleep(100);
+  }
+  return false;
+}
+
+async function shot(mode, port) {
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox','--disable-gpu','--force-device-scale-factor=1'] });
   const page = await browser.newPage({ viewport: { width: 1168, height: 784 }, deviceScaleFactor: 1 });
-  await page.goto(`http://127.0.0.1:8799/?mode=${mode}&demo=1`, { waitUntil: 'networkidle', timeout: 120000 });
-  await page.waitForTimeout(1500);
-  await page.evaluate(async () => {
+  await page.goto(`http://127.0.0.1:${port}/?mode=${mode}&demo=1`, { waitUntil: 'networkidle', timeout: 120000 });
+  await page.waitForTimeout(3500);
+  await page.evaluate(() => {
     document.getElementById('assistant-root')?.classList.add('assistant-hidden');
     document.getElementById('overlay')?.classList.add('hidden');
-    await Promise.all([...document.images].map(img => img.complete ? null : new Promise(r => { img.onload=r; img.onerror=r; })));
   });
   await page.waitForTimeout(500);
-  await page.screenshot({ path: join(shots, `omni-${mode}.png`), type: 'png', clip: { x:0,y:0,width:1168,height:784 } });
-  console.log('wrote', mode);
+  const path = join(shots, `omni-${mode}.png`);
+  await page.screenshot({ path, type: 'png', clip: { x:0,y:0,width:1168,height:784 } });
+  console.log('wrote', path);
   await page.evaluate(() => document.getElementById('assistant-root')?.classList.remove('assistant-hidden'));
   await page.waitForTimeout(400);
-  await page.screenshot({ path: join(shots, `omni-${mode}-with-assistant.png`), type: 'png', clip: { x:0,y:0,width:1168,height:784 } });
-  await page.close();
+  await page.screenshot({ path: join(shots, `omni-${mode}-with-assistant.png`), type:'png', clip:{x:0,y:0,width:1168,height:784} });
+  await browser.close();
 }
-await shot('plain');
-await shot('ultra');
-await browser.close();
-server.close();
+
+const port = 8755;
+const child = spawn(coreBin, [
+  '--mode','plain','--port', String(port),
+  '--ui-dir', uiDir,
+  '--fixtures-dir', fixtures,
+  '--data-dir', join(root, '.omni-data-shot'),
+], { stdio: ['ignore','pipe','pipe'] });
+child.stdout.on('data', d => process.stdout.write(`[core] ${d}`));
+child.stderr.on('data', d => process.stderr.write(`[core] ${d}`));
+
+const ok = await waitHealth(port);
+if (!ok) {
+  console.error('core failed to start');
+  child.kill();
+  process.exit(1);
+}
+await shot('plain', port);
+await shot('ultra', port);
+child.kill();
+console.log('done');

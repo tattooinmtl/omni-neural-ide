@@ -58,30 +58,10 @@ func main() {
 		fmt.Println("failed to start core:", err)
 		os.Exit(3)
 	}
-	url := fmt.Sprintf("http://127.0.0.1:8741/?mode=%s", mode)
-	fmt.Printf("OMNI-CODE core pid=%d — native window %s\n", cmd.Process.Pid, url)
-	time.Sleep(600 * time.Millisecond)
-	openAppWindow(url)
+	fmt.Printf("OMNI-CODE core pid=%d (native wry window owned by omni-core)\n", cmd.Process.Pid)
 	_ = cmd.Wait()
 }
 
-func openAppWindow(url string) {
-	if runtime.GOOS == "windows" {
-		// Edge app mode = native window chrome, not a tabbed browser IDE
-		candidates := []string{
-			`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
-			`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
-		}
-		for _, c := range candidates {
-			if _, err := os.Stat(c); err == nil {
-				cmd := exec.Command(c, "--app="+url, "--window-size=1168,784")
-				_ = cmd.Start()
-				return
-			}
-		}
-	}
-	_ = openBrowser(url)
-}
 
 func installRoot() string {
 	if v := os.Getenv("OMNI_HOME"); v != "" {

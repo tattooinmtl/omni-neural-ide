@@ -5,7 +5,7 @@ edition = "2021"
 description = "OMNI-CODE / Ultra Rust core — harness, guardrails, API, native window"
 
 [features]
-default = []
+default = ["native-window"]
 native-window = ["dep:wry", "dep:tao"]
 
 [dependencies]

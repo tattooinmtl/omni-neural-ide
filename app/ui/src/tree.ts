@@ -1,21 +1,21 @@
 import type { TreeNode } from './api';
+import { svg } from './icons';
 
-function iconFor(node: TreeNode, mode: string): string {
+function iconFor(node: TreeNode): string {
   if (node.kind === 'dir') {
     const n = node.name.toLowerCase();
-    if (n === 'backend') return '/icons/plain_ft_2.png';
-    if (n.startsWith('.')) return '/icons/plain_ft_1.png';
-    return '/icons/plain_ft_0.png';
+    if (n === 'backend') return svg.folderGreen;
+    if (n.startsWith('.')) return svg.folderBlue;
+    return svg.folder;
   }
   const n = node.name.toLowerCase();
-  if (n.endsWith('.py')) return '/icons/plain_ft_3.png';
-  if (n.endsWith('.tsx') || n.endsWith('.ts')) return '/icons/ultra_ft_3.png';
-  if (n.endsWith('.css')) return '/icons/ultra_ft_5.png';
-  if (n.endsWith('.html')) return '/icons/plain_ft_6.png';
-  if (n.endsWith('.md')) return '/icons/plain_ft_8.png';
-  if (n.endsWith('.json')) return '/icons/ultra_ft_7.png';
-  if (n.endsWith('.txt') || n === '.gitignore') return '/icons/plain_ft_9.png';
-  return '/icons/plain_ft_10.png';
+  if (n.endsWith('.py')) return svg.py;
+  if (n.endsWith('.tsx') || n.endsWith('.ts')) return svg.ts;
+  if (n.endsWith('.css')) return svg.css;
+  if (n.endsWith('.html')) return svg.html;
+  if (n.endsWith('.md')) return svg.md;
+  if (n.endsWith('.json')) return svg.json;
+  return svg.file;
 }
 
 export function renderTree(
@@ -30,10 +30,9 @@ export function renderTree(
     host.innerHTML = `<div class="tree-item" style="color:var(--fg-mute)">Open a folder to begin</div>`;
     return;
   }
-  const mode = document.body.classList.contains('mode-ultra') ? 'ultra' : 'plain';
   const rootLabel = document.createElement('div');
   rootLabel.className = 'tree-root-label';
-  rootLabel.innerHTML = `<span class="chev">▼</span><img class="icon" src="${iconFor(root, mode)}" width="16" height="16"/> ${escapeHtml(root.name)}`;
+  rootLabel.innerHTML = `<span class="chev">▼</span><span class="icon">${iconFor(root)}</span> ${escapeHtml(root.name)}`;
   host.appendChild(rootLabel);
 
   const walk = (nodes: TreeNode[] | undefined, depth: number) => {
@@ -46,7 +45,7 @@ export function renderTree(
       const open = expanded.has(n.path);
       el.innerHTML = `
         <span class="chev">${isDir ? (open ? '▼' : '▶') : ''}</span>
-        <img class="icon" src="${iconFor(n, mode)}" width="16" height="16" alt=""/>
+        <span class="icon">${iconFor(n)}</span>
         <span class="name">${escapeHtml(n.name)}</span>`;
       el.addEventListener('click', (e) => {
         e.stopPropagation();

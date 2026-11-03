@@ -1,12 +1,16 @@
 import { api, type ChatMessage } from './api';
 import { svg } from './icons';
 
+export type FixtureMsg = { role: 'user' | 'assistant'; content: string; time?: string };
+
 export class ChatPanel {
   private el: HTMLElement;
   private messages: ChatMessage[] = [];
+  private times: string[] = [];
   private model = 'Omni Ultra 1.2';
   private thinking = false;
   private mode: 'plain' | 'ultra';
+  private showThinking = false;
 
   constructor(el: HTMLElement, mode: 'plain' | 'ultra') {
     this.el = el;
@@ -21,6 +25,18 @@ export class ChatPanel {
 
   clear() {
     this.messages = [];
+    this.times = [];
+    this.thinking = false;
+    this.showThinking = false;
+    this.render();
+  }
+
+  /** Load a fixture transcript into the real chat component (no DOM faking). */
+  loadFixture(msgs: FixtureMsg[], opts?: { thinking?: boolean }) {
+    this.messages = msgs.map(m => ({ role: m.role, content: m.content }));
+    this.times = msgs.map(m => m.time || '');
+    this.showThinking = !!opts?.thinking && this.mode === 'ultra';
+    this.thinking = this.showThinking;
     this.render();
   }
 
@@ -34,7 +50,7 @@ export class ChatPanel {
         </div>
         <div class="controls">
           <button title="Minimize">—</button>
-          <button title="Close" data-act="close-chat">${svg.close}</button>
+          <button title="Close">${svg.close}</button>
         </div>
       </div>
       <div class="model-picker-wrap">
@@ -44,7 +60,7 @@ export class ChatPanel {
         </button>
       </div>
       <div class="chat-messages" id="chat-msgs"></div>
-      <div class="thinking ${this.thinking ? '' : 'hidden'}" id="thinking">
+      <div class="thinking ${this.thinking && this.mode==='ultra' ? '' : 'hidden'}" id="thinking">
         <span class="dots"><span></span><span></span><span></span></span>
         Omni Ultra is thinking.
       </div>
@@ -66,14 +82,14 @@ export class ChatPanel {
 
   private paintMessages() {
     const host = this.el.querySelector('#chat-msgs')!;
-    host.innerHTML = this.messages.filter(m => m.role !== 'system').map(m => {
+    host.innerHTML = this.messages.filter(m => m.role !== 'system').map((m, i) => {
       const who = m.role === 'user' ? 'You' : (this.mode === 'ultra' ? 'OMNI' : 'OMNI-CODE');
       const cls = m.role === 'user' ? 'user' : 'ai';
       const avatar = m.role === 'user' ? 'U' : '◎';
       const body = formatBody(m.content);
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const time = this.times[i] || '';
       return `<div class="msg ${cls}">
-        <div class="msg-head"><div class="avatar">${avatar}</div><strong>${who}</strong><span class="msg-time">${time}</span></div>
+        <div class="msg-head"><div class="avatar">${avatar}</div><strong>${who}</strong>${time?`<span class="msg-time">${time}</span>`:''}</div>
         <div class="msg-body">${body}</div>
       </div>`;
     }).join('');
@@ -104,25 +120,32 @@ export class ChatPanel {
       try {
         const r = await api.slash(cmd, rest.join(' '));
         this.messages.push({ role: 'user', content: trimmed });
+        this.times.push('');
         this.messages.push({ role: 'assistant', content: r.message });
+        this.times.push('');
       } catch (e: any) {
         this.messages.push({ role: 'user', content: trimmed });
+        this.times.push('');
         this.messages.push({ role: 'assistant', content: `Slash error: ${e.message}` });
+        this.times.push('');
       }
       this.render();
       return;
     }
     this.messages.push({ role: 'user', content: trimmed });
+    this.times.push('');
     this.thinking = true;
     this.render();
     try {
       const r = await api.chat(this.messages, this.model);
       this.messages.push({ role: 'assistant', content: r.content });
+      this.times.push('');
     } catch (e: any) {
       this.messages.push({
         role: 'assistant',
         content: `Could not reach the model API (${e.message}). Enter MiniMax / NVIDIA keys in the launcher, then try again.`,
       });
+      this.times.push('');
     } finally {
       this.thinking = false;
       this.render();

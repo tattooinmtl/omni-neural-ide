@@ -2,10 +2,10 @@ mod guardrails;
 mod fsapi;
 mod ai;
 mod harness;
+mod state;
 mod tts;
 #[cfg(all(windows, feature = "native-window"))]
 mod native_win;
-mod state;
 
 use axum::{
     routing::{get, post},
@@ -20,29 +20,22 @@ use tracing_subscriber::EnvFilter;
 #[derive(Parser, Debug)]
 #[command(name = "omni-core", about = "OMNI-CODE / Ultra core")]
 struct Args {
-    /// plain | ultra — set by Go launcher every launch
     #[arg(long, default_value = "plain")]
     mode: String,
-
-    /// HTTP API + UI port
     #[arg(long, default_value = "8741")]
     port: u16,
-
-    /// Install / data root
     #[arg(long)]
     data_dir: Option<PathBuf>,
-
-    /// Directory of built UI assets (optional)
     #[arg(long)]
     ui_dir: Option<PathBuf>,
-
-    /// Open project folder on start
     #[arg(long)]
     project: Option<PathBuf>,
-
-    /// Open wry/tao native window (Windows; requires native-window feature)
-    #[arg(long, default_value_t = true)]
+    /// Open a native wry/tao window (Windows). Default true on Windows builds with feature.
+    #[arg(long, default_value_t = cfg!(all(windows, feature = "native-window")))]
     native: bool,
+    /// Also serve fixture chat JSON / fixtures root
+    #[arg(long)]
+    fixtures_dir: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -84,21 +77,57 @@ async fn main() -> anyhow::Result<()> {
     let ui_dir = args.ui_dir.unwrap_or_else(|| {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ui/dist")
     });
+    let fixtures = args.fixtures_dir.unwrap_or_else(|| {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures")
+    });
 
-    let app = if ui_dir.join("index.html").exists() {
-        Router::new()
-            .merge(api)
-            .fallback_service(ServeDir::new(ui_dir))
-            .layer(CorsLayer::permissive())
-    } else {
-        api.layer(CorsLayer::permissive())
-    };
+    let mut app = Router::new().merge(api).layer(CorsLayer::permissive());
+    if fixtures.join("chat").exists() {
+        app = app.nest_service("/fixtures-chat", ServeDir::new(fixtures.join("chat")));
+    }
+    if ui_dir.join("index.html").exists() {
+        app = app.fallback_service(ServeDir::new(&ui_dir).append_index_html_on_directories(true));
+    }
 
     let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
     tracing::info!("OMNI-CODE core ({mode}) listening on http://{addr}");
-    tracing::info!("data_dir={}", data_dir.display());
+    tracing::info!("data_dir={} ui_dir={}", data_dir.display(), ui_dir.display());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    #[cfg(all(windows, feature = "native-window"))]
+    {
+        if args.native {
+            // Serve in background; native window blocks main-ish via spawn_blocking
+            let server = axum::serve(listener, app);
+            tokio::spawn(async move {
+                if let Err(e) = server.await {
+                    tracing::error!("server error: {e}");
+                }
+            });
+            // Wait until port accepts
+            for _ in 0..50 {
+                if tokio::net::TcpStream::connect(addr).await.is_ok() { break; }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            let url = format!("http://{addr}/?mode={mode}");
+            let title = if mode == "ultra" { "OMNI-CODE Ultra" } else { "OMNI-CODE" };
+            tracing::info!("opening native wry window: {url}");
+            // wry/tao event loop is not Send on all platforms — run in a dedicated OS thread
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let r = native_win::run_native(url, title.into());
+                let _ = tx.send(r);
+            });
+            // Keep tokio alive while window is open
+            loop {
+                if rx.try_recv().is_ok() { break; }
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+            return Ok(());
+        }
+    }
+
     axum::serve(listener, app).await?;
     Ok(())
 }
