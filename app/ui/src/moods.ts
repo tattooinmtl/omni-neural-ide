@@ -30,21 +30,24 @@ export function nearestMood(mood: string): string {
   return NEAREST[k] || 'neutral';
 }
 
+export const DIGITAL_FACE_ASSET_VER = '1.2.3';
+
 export function moodPortrait(mood: string, avatar: AvatarId = 'female', faceMode: 'classic' | 'digital' = 'digital'): string {
   const m = nearestMood(mood);
   if (faceMode === 'digital') {
-    // one clean digital base per avatar; mood comes from LED layers
-    return avatar === 'male' ? '/omni-presence/digital/male/neutral.jpg' : '/omni-presence/digital/neutral.jpg';
+    // versioned lip-free bases only; query busts WebView2 cache
+    const file = avatar === 'male' ? 'male.jpg' : 'female.jpg';
+    return `/omni-presence/digital/v123/${file}?v=${DIGITAL_FACE_ASSET_VER}`;
   }
-  if (avatar === 'male') return `/omni-presence/male/${m}.jpg`;
-  return `/omni-presence/${m}.jpg`;
+  if (avatar === 'male') return `/omni-presence/male/${m}.jpg?v=${DIGITAL_FACE_ASSET_VER}`;
+  return `/omni-presence/${m}.jpg?v=${DIGITAL_FACE_ASSET_VER}`;
 }
 
 /** Mouth openness frames 0..3 (full portraits). */
 export function mouthFrame(level: number, avatar: AvatarId = 'female'): string {
   const n = Math.max(0, Math.min(3, Math.round(level)));
-  if (avatar === 'male') return `/omni-presence/male/mouth/${n}.jpg`;
-  return `/omni-presence/mouth/${n}.jpg`;
+  if (avatar === 'male') return `/omni-presence/male/mouth/${n}.jpg?v=${DIGITAL_FACE_ASSET_VER}`;
+  return `/omni-presence/mouth/${n}.jpg?v=${DIGITAL_FACE_ASSET_VER}`;
 }
 
 export const moodColor: Record<string, number> = {

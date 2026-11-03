@@ -137,6 +137,32 @@ async fn main() {
     }
 }
 
+
+fn clear_webview_cache_on_version_change(data_dir: &std::path::Path) {
+    let stamp = data_dir.join("webview2").join(".omni-asset-ver");
+    let current = env!("CARGO_PKG_VERSION");
+    let prev = std::fs::read_to_string(&stamp).unwrap_or_default();
+    if prev.trim() == current {
+        return;
+    }
+    // Drop WebView2 HTTP/image caches so digital face assets cannot stick after updates.
+    for name in [
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "GrShaderCache",
+        "ShaderCache",
+        "Service Worker",
+        "blob_storage",
+        "DawnWebGPUCache",
+        "DawnGraphiteCache",
+    ] {
+        let p = data_dir.join("webview2").join(name);
+        let _ = std::fs::remove_dir_all(&p);
+    }
+    let _ = std::fs::write(&stamp, current);
+}
+
 async fn run() -> anyhow::Result<()> {
     let args = Args::parse();
     let mode = if args.mode.eq_ignore_ascii_case("ultra") {
@@ -150,6 +176,7 @@ async fn run() -> anyhow::Result<()> {
     std::fs::create_dir_all(data_dir.join("keys"))?;
     std::fs::create_dir_all(data_dir.join("logs"))?;
     std::fs::create_dir_all(data_dir.join("webview2"))?;
+    clear_webview_cache_on_version_change(&data_dir);
 
     init_logging(&data_dir);
 

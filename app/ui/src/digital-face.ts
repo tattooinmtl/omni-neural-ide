@@ -44,14 +44,14 @@ type Panel = { cx: number; cy: number; rx: number; ry: number };
 /** Tight panels tuned to v1.2.2 digital bases (inside sockets/slit only). */
 export const PANELS_BY_AVATAR: Record<AvatarId, { leftEye: Panel; rightEye: Panel; mouth: Panel }> = {
   female: {
-    leftEye: { cx: 0.355, cy: 0.398, rx: 0.086, ry: 0.050 },
-    rightEye: { cx: 0.645, cy: 0.398, rx: 0.086, ry: 0.050 },
-    mouth: { cx: 0.50, cy: 0.692, rx: 0.108, ry: 0.020 },
+    leftEye: { cx: 0.355, cy: 0.395, rx: 0.082, ry: 0.048 },
+    rightEye: { cx: 0.645, cy: 0.395, rx: 0.082, ry: 0.048 },
+    mouth: { cx: 0.5, cy: 0.675, rx: 0.092, ry: 0.0135 },
   },
   male: {
-    leftEye: { cx: 0.355, cy: 0.398, rx: 0.080, ry: 0.042 },
-    rightEye: { cx: 0.645, cy: 0.398, rx: 0.080, ry: 0.042 },
-    mouth: { cx: 0.50, cy: 0.682, rx: 0.108, ry: 0.019 },
+    leftEye: { cx: 0.355, cy: 0.392, rx: 0.08, ry: 0.045 },
+    rightEye: { cx: 0.645, cy: 0.392, rx: 0.08, ry: 0.045 },
+    mouth: { cx: 0.5, cy: 0.665, rx: 0.096, ry: 0.014 },
   },
 };
 
