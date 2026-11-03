@@ -83,3 +83,26 @@ func TestMockLatestReleaseJSON(t *testing.T) {
 		t.Fatalf("tag %s", decoded.TagName)
 	}
 }
+
+func TestEffectiveLocalIgnoresStaleFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "version"), []byte("1.2.2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := effectiveLocalVersion(dir)
+	if got != version {
+		t.Fatalf("effectiveLocalVersion=%s want embedded %s", got, version)
+	}
+	if versionLess(got, version) {
+		t.Fatal("running binary must not be less than itself")
+	}
+}
+
+func TestVersionEq(t *testing.T) {
+	if !versionEq("1.2.4", "v1.2.4") {
+		t.Fatal("expected equal")
+	}
+	if versionEq("1.2.4", "1.2.5") {
+		t.Fatal("expected not equal")
+	}
+}

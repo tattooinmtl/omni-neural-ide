@@ -61,6 +61,12 @@ func versionLess(a, b string) bool {
 	return false
 }
 
+func versionEq(a, b string) bool {
+	va, oka := parseSemver(a)
+	vb, okb := parseSemver(b)
+	return oka && okb && va == vb
+}
+
 func writeVersionFile(install, ver string) {
 	_ = os.MkdirAll(install, 0o755)
 	_ = os.WriteFile(filepath.Join(install, "version"), []byte(strings.TrimSpace(ver)+"\n"), 0o644)
@@ -72,6 +78,31 @@ func readVersionFile(install string) string {
 		return version
 	}
 	return strings.TrimSpace(string(b))
+}
+
+func lastUpdateStampPath(install string) string {
+	return filepath.Join(install, "logs", ".omni-last-update-tag")
+}
+
+func readLastUpdateTag(install string) string {
+	b, err := os.ReadFile(lastUpdateStampPath(install))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func writeLastUpdateTag(install, tag string) {
+	_ = os.MkdirAll(filepath.Join(install, "logs"), 0o755)
+	_ = os.WriteFile(lastUpdateStampPath(install), []byte(strings.TrimSpace(tag)+"\n"), 0o644)
+}
+
+// effectiveLocalVersion is the version of the binary we are running, never a
+// stale on-disk stamp from a previous install. Stamping the file happens at
+// splash start so upgrades cannot leave a lower version that retriggers setup.
+func effectiveLocalVersion(install string) string {
+	_ = install
+	return version
 }
 
 // checkAndApplyUpdate queries GitHub releases. Fail-open on any error.
@@ -105,17 +136,25 @@ func checkAndApplyUpdate(install string, status func(string), log func(string, .
 		status("")
 		return false
 	}
-	local := readVersionFile(install)
-	if local == "" {
-		local = version
-	}
+
+	local := effectiveLocalVersion(install)
 	if !versionLess(local, rel.TagName) {
-		log("up to date local=%s remote=%s", local, rel.TagName)
-		status("Up to date · v"+strings.TrimPrefix(local, "v"))
+		log("up to date local=%s remote=%s file=%s", local, rel.TagName, readVersionFile(install))
+		status("Up to date · v" + strings.TrimPrefix(local, "v"))
 		time.Sleep(400 * time.Millisecond)
 		status("")
 		return false
 	}
+
+	// Never re-apply the same remote tag (guards update loops if setup didn't bump files).
+	if versionEq(readLastUpdateTag(install), rel.TagName) {
+		log("skip update loop: already attempted %s", rel.TagName)
+		status("Update already applied · v" + strings.TrimPrefix(local, "v"))
+		time.Sleep(600 * time.Millisecond)
+		status("")
+		return false
+	}
+
 	status("Updating to " + rel.TagName + "…")
 	log("update available %s -> %s", local, rel.TagName)
 
@@ -125,13 +164,25 @@ func checkAndApplyUpdate(install string, status func(string), log func(string, .
 		if strings.HasPrefix(n, "omni-code-setup-") && strings.HasSuffix(n, ".exe") {
 			setupURL = a.BrowserDownloadURL
 		}
-		if n == "sha256sums.txt" {
-			sumsURL = a.BrowserDownloadURL
+		// Accept SHA256SUMS.txt or SHA256SUMS-x.y.z.txt
+		if n == "sha256sums.txt" || (strings.HasPrefix(n, "sha256sums") && strings.HasSuffix(n, ".txt")) {
+			// Prefer exact SHA256SUMS.txt when both exist
+			if n == "sha256sums.txt" || sumsURL == "" {
+				sumsURL = a.BrowserDownloadURL
+			}
 		}
 	}
 	if setupURL == "" {
 		log("no setup asset in release")
 		status("Update skipped (no setup)")
+		time.Sleep(800 * time.Millisecond)
+		status("")
+		return false
+	}
+	if sumsURL == "" {
+		// Missing checksum → skip update (do not exit / do not install blindly).
+		log("no checksum asset; skip update")
+		status("Update skipped (no checksum)")
 		time.Sleep(800 * time.Millisecond)
 		status("")
 		return false
@@ -147,22 +198,26 @@ func checkAndApplyUpdate(install string, status func(string), log func(string, .
 		status("")
 		return false
 	}
-	if sumsURL != "" {
-		sumsPath := filepath.Join(tmpDir, "SHA256SUMS.txt")
-		if err := downloadFile(client, sumsURL, sumsPath); err != nil {
-			log("download sums: %v", err)
-		} else if err := verifySHA256(setupPath, sumsPath); err != nil {
-			log("sha256 verify failed: %v", err)
-			status("Update checksum failed")
-			time.Sleep(900 * time.Millisecond)
-			status("")
-			return false
-		} else {
-			log("sha256 ok")
-		}
+	sumsPath := filepath.Join(tmpDir, "SHA256SUMS.txt")
+	if err := downloadFile(client, sumsURL, sumsPath); err != nil {
+		log("download sums: %v — skip update", err)
+		status("Update skipped (checksum download)")
+		time.Sleep(800 * time.Millisecond)
+		status("")
+		return false
 	}
+	if err := verifySHA256(setupPath, sumsPath); err != nil {
+		log("sha256 verify failed: %v — skip update", err)
+		status("Update skipped (checksum)")
+		time.Sleep(900 * time.Millisecond)
+		status("")
+		return false
+	}
+	log("sha256 ok")
 
-	// Silent per-user upgrade; NSIS preserves keys/config/logs under same InstDir.
+	// Record attempt before spawn so a failed/partial install cannot loop forever.
+	writeLastUpdateTag(install, rel.TagName)
+
 	cmd := exec.Command(setupPath, "/S")
 	cmd.Dir = tmpDir
 	if err := cmd.Start(); err != nil {
@@ -174,7 +229,6 @@ func checkAndApplyUpdate(install string, status func(string), log func(string, .
 	}
 	log("spawned silent setup pid=%d", cmd.Process.Pid)
 	status("Installing " + rel.TagName + "…")
-	// New setup installs and can relaunch; exit this instance.
 	return true
 }
 
@@ -213,18 +267,13 @@ func verifySHA256(filePath, sumsPath string) error {
 			continue
 		}
 		name := strings.TrimPrefix(fields[len(fields)-1], "*")
-		if strings.EqualFold(filepath.Base(name), wantName) ||
-			(strings.HasPrefix(strings.ToLower(name), "omni-code-setup-") && strings.HasSuffix(strings.ToLower(name), ".exe")) {
-			// Prefer exact; also accept any setup exe line if updating via renamed temp file
-			if strings.EqualFold(filepath.Base(name), wantName) || expected == "" {
-				expected = fields[0]
-			}
-			if strings.EqualFold(filepath.Base(name), wantName) {
-				break
-			}
+		base := strings.ToLower(filepath.Base(name))
+		if strings.EqualFold(base, wantName) {
+			expected = fields[0]
+			break
 		}
-		// SHA256SUMS lists OMNI-CODE-Setup-x.y.z.exe — match by prefix
-		if strings.HasPrefix(strings.ToLower(filepath.Base(name)), "omni-code-setup-") && strings.HasSuffix(strings.ToLower(name), ".exe") {
+		// SHA256SUMS lists OMNI-CODE-Setup-x.y.z.exe — temp download is renamed.
+		if strings.HasPrefix(base, "omni-code-setup-") && strings.HasSuffix(base, ".exe") && expected == "" {
 			expected = fields[0]
 		}
 	}

@@ -62,6 +62,13 @@ func main() {
 			_ = logf.Sync()
 		}
 	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			msg := fmt.Sprintf("OMNI-CODE Gateway crashed:\n\n%v\n\nLog:\n%s", rec, logPath)
+			log("panic: %v", rec)
+			msgBox(msg)
+		}
+	}()
 
 	choice := showSplash(install, logf, log)
 	if !choice.resultOK {
@@ -125,9 +132,31 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 	}
 	st.wnd = ui.NewMain(opts)
 
+	writeVersionFile(install, version)
+
+	setStatus := func(s string) {
+		st.status = s
+		_ = st.wnd.Hwnd().InvalidateRect(nil, false)
+		_ = st.wnd.Hwnd().UpdateWindow()
+		var msg win.MSG
+		for i := 0; i < 8; i++ {
+			ok := win.PeekMessage(&msg, win.HWND(0), 0, 0, co.PM_REMOVE)
+			if !ok {
+				break
+			}
+			_ = win.TranslateMessage(&msg)
+			_ = win.DispatchMessage(&msg)
+		}
+	}
+
+	const updateTimerID = 1
+
 	st.wnd.On().WmCreate(func(_ ui.WmCreate) int {
 		applyDarkCaption(st.wnd.Hwnd())
 		applyWindowIcons(st.wnd.Hwnd())
+		if err := st.wnd.Hwnd().SetTimer(updateTimerID, 200); err != nil {
+			log("SetTimer in WmCreate: %v", err)
+		}
 		return 0
 	})
 	st.wnd.On().WmEraseBkgnd(func(_ ui.WmEraseBkgnd) int { return 1 })
@@ -162,35 +191,31 @@ func showSplash(install string, logf *os.File, log func(string, ...any)) *splash
 			_ = st.wnd.Hwnd().DestroyWindow()
 		}
 	})
+	st.wnd.On().WmTimer(updateTimerID, func() {
+		_ = st.wnd.Hwnd().KillTimer(updateTimerID)
+		log("update timer fired")
+		if checkAndApplyUpdate(install, setStatus, log) {
+			log("exiting for silent setup upgrade")
+			st.resultOK = false
+			_ = st.wnd.Hwnd().DestroyWindow()
+		}
+	})
 
-	// Show window first so status line is visible during update check.
+	// Show window immediately; update check runs via WM_TIMER after the loop starts.
 	_ = st.wnd.Hwnd().ShowWindow(co.SW_SHOW)
 	_ = st.wnd.Hwnd().UpdateWindow()
 	applyDarkCaption(st.wnd.Hwnd())
 	applyWindowIcons(st.wnd.Hwnd())
-
-	setStatus := func(s string) {
-		st.status = s
-		_ = st.wnd.Hwnd().InvalidateRect(nil, false)
-		_ = st.wnd.Hwnd().UpdateWindow()
-		// Pump a few messages so paint runs
-		var msg win.MSG
-		for i := 0; i < 8; i++ {
-			ok := win.PeekMessage(&msg, win.HWND(0), 0, 0, co.PM_REMOVE)
-			if !ok {
-				break
-			}
-			_ = win.TranslateMessage(&msg)
-			_ = win.DispatchMessage(&msg)
+	// Fallback if WmCreate already passed before SetTimer (some windigo paths).
+	if err := st.wnd.Hwnd().SetTimer(updateTimerID, 200); err != nil {
+		log("SetTimer fallback: %v — inline update check", err)
+		if checkAndApplyUpdate(install, setStatus, log) {
+			log("exiting for silent setup upgrade")
+			_ = st.wnd.Hwnd().DestroyWindow()
+			st.resultOK = false
+			return st
 		}
 	}
-	if checkAndApplyUpdate(install, setStatus, log) {
-		log("exiting for silent setup upgrade")
-		_ = st.wnd.Hwnd().DestroyWindow()
-		st.resultOK = false
-		return st
-	}
-	writeVersionFile(install, version)
 
 	st.wnd.RunAsMain()
 	if st.bgBmp != 0 {

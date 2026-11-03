@@ -1,14 +1,14 @@
-; OMNI-CODE v1.2.4 per-user Windows installer (no admin)
+; OMNI-CODE v1.2.5 per-user Windows installer (no admin)
 ; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.2.4"
+!define PRODUCT_VERSION "1.2.5"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.2.4.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.2.5.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user
@@ -132,6 +132,7 @@ Section "OMNI-CODE (required)" SecMain
   File /r "..\..\..\omni-installer\payload\fixtures\*.*"
 
   SetOutPath "$INSTDIR"
+  File "/oname=version" "..\..\..\omni-installer\payload\version"
   File "/oname=README.txt" "..\..\..\omni-installer\payload\README.txt"
   SetOutPath "$INSTDIR\assets"
   File "/oname=omni-logo.bmp" "..\..\..\omni-installer\payload\assets\omni-logo.bmp"

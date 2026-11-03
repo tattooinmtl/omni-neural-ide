@@ -30,7 +30,7 @@ export function nearestMood(mood: string): string {
   return NEAREST[k] || 'neutral';
 }
 
-export const DIGITAL_FACE_ASSET_VER = '1.2.4';
+export const DIGITAL_FACE_ASSET_VER = '1.2.5';
 
 export function moodPortrait(mood: string, avatar: AvatarId = 'female', faceMode: 'classic' | 'digital' = 'digital'): string {
   const m = nearestMood(mood);
