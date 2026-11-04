@@ -14,7 +14,7 @@ fn main() {
     let ico_abs = ico.canonicalize().unwrap_or(ico.clone());
     std::fs::write(
         &rc,
-        format!("IDI_ICON1 ICON \"{}\"\n", ico_abs.display().to_string().replace('\\', "/")),
+        format!("1 ICON \"{}\"\n", ico_abs.display().to_string().replace('\\', "/")),
     )
     .expect("write rc");
 

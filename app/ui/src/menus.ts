@@ -214,7 +214,14 @@ export function buildMenus(opts: { ultra: boolean; panels: Record<string, boolea
       { type: 'item', id: 'term.clear', label: 'Clear', icon: svg.menuTrash },
     ],
     app: [
-      { type: 'item', id: 'app.resetLayout', label: 'Reset Layout', icon: svg.menuLayout },
+      { type: 'sub', label: 'Layout', icon: svg.menuLayout, children: [
+        { type: 'item', id: 'layout.default', label: 'Default (Explorer · Editor + Agent · Omni + Terminal)', icon: svg.menuLayout },
+        { type: 'item', id: 'layout.focus', label: 'Focus (Explorer + Editor)', icon: svg.menuLayout },
+        { type: 'item', id: 'layout.grid', label: '2×2 middle', icon: svg.menuLayout },
+        { type: 'sep' },
+        { type: 'item', id: 'layout.floatOmni', label: 'Float Omni the Presence', icon: svg.user },
+        { type: 'item', id: 'app.resetLayout', label: 'Reset Layout', icon: svg.menuLayout },
+      ] },
       { type: 'sub', label: 'Panels', icon: svg.menuPanel, children: panelMenuItems(opts.panels) },
       { type: 'sep' },
       { type: 'item', id: 'app.settings', label: 'Settings…', shortcut: 'Ctrl+,', icon: svg.menuSettings },

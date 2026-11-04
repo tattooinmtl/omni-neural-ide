@@ -474,3 +474,105 @@ body.mode-plain .menu-item .mi-ico{display:none}
 .settings-store{margin:6px 0 12px;padding:8px 10px;border:1px solid #234;border-radius:8px;background:#0c1622;font-size:12px;line-height:1.6}
 .settings-store code{font-size:11px;color:#9fd}
 .term-line.ok{color:#5ee2a0}.term-line.dim{opacity:.6}
+
+/* ===================== v1.3.5 dock frame ===================== */
+.dock-root{flex:1 1 auto;min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);position:relative;background:var(--bg-editor)}
+.dock-region{min-width:0;min-height:0;position:relative;overflow:hidden}
+.dock-region-left,.dock-region-right{display:flex;flex-direction:column}
+.dock-region-middle{display:grid;min-width:0}
+.dock-col-split,.dock-row-split,.dock-mid-split{background:var(--border-soft);position:relative;z-index:5;transition:background .12s}
+.dock-col-split,.dock-mid-split.v{cursor:col-resize}
+.dock-row-split,.dock-mid-split.h{cursor:row-resize}
+.dock-row-split{flex:0 0 5px}
+.dock-col-split:hover,.dock-row-split:hover,.dock-mid-split:hover,body.dock-resizing .dock-col-split:active{background:rgba(34,211,238,.45)}
+body.dock-resizing,body.dock-dragging{user-select:none}
+body.dock-resizing iframe,body.dock-dragging iframe{pointer-events:none}
+
+.dock-panel{display:flex;flex-direction:column;min-width:0;min-height:90px;overflow:hidden;background:var(--bg-sidebar);position:relative}
+.dock-region-middle .dock-panel{min-height:100px}
+.dock-panel.drag-src{opacity:.45}
+.dock-panel.flash{box-shadow:inset 0 0 0 2px var(--accent)}
+.dock-head{height:26px;flex:0 0 26px;display:flex;align-items:center;gap:6px;padding:0 4px 0 8px;background:var(--bg-tabbar);border-bottom:1px solid var(--border-soft);cursor:grab;user-select:none;touch-action:none}
+.dock-head:active{cursor:grabbing}
+.dock-grip{width:8px;height:12px;flex:0 0 8px;opacity:.45;background:radial-gradient(circle,currentColor 1px,transparent 1.3px) 0 0/4px 4px;color:var(--fg-dim)}
+.dock-title{flex:1;min-width:0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock-actions{display:flex;gap:2px;opacity:.55;transition:opacity .12s}
+.dock-head:hover .dock-actions,.dock-panel.floating .dock-actions{opacity:1}
+.dock-actions button{width:20px;height:20px;border-radius:4px;font-size:12px;line-height:20px;color:var(--fg-dim);display:flex;align-items:center;justify-content:center}
+.dock-actions button:hover{background:rgba(255,255,255,.08);color:var(--fg)}
+.dock-panel.docked [data-a="dock"]{display:none}
+.dock-panel.floating [data-a="float"]{display:none}
+.dock-body{flex:1 1 auto;min-height:0;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.dock-body > *{flex:1 1 auto;min-height:0;min-width:0}
+.dock-pane{display:flex;flex-direction:column;background:#01080f}
+.dock-pane .panel-placeholder{font-size:12px}
+.dock-empty{grid-area:1/1/-1/-1;display:flex;align-items:center;justify-content:center;color:var(--fg-mute);font-size:13px;border:1px dashed var(--border-soft);margin:12px;border-radius:8px}
+
+/* panels that used to be fixed columns now fill their slot */
+.dock-body > .sidebar,.dock-body > .chat,.dock-body > .editor-col{width:auto!important;min-width:0!important;max-width:none!important;border:0!important}
+.dock-body > .sidebar .sidebar-header .label{display:none}
+.dock-panel[data-panel="chat"] .chat-header{display:none}
+
+/* floating windows */
+.dock-float-layer{position:fixed;inset:0;pointer-events:none;z-index:1500}
+.dock-panel.floating{position:fixed;pointer-events:auto;resize:both;min-width:260px;min-height:260px;border:1px solid var(--accent);border-radius:10px;box-shadow:0 18px 60px rgba(0,0,0,.6),0 0 0 1px rgba(34,211,238,.15)}
+.dock-panel.floating .dock-head{cursor:move;background:linear-gradient(180deg,#0b1a26,#08131c)}
+.dock-panel.floating .dock-head .dock-title{color:var(--accent)}
+
+/* drag & drop */
+.dock-ghost{position:fixed;z-index:3000;pointer-events:none;padding:5px 10px;border-radius:6px;background:#0b1a26;color:var(--accent);border:1px solid var(--accent);font-size:12px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.dock-drop{position:fixed;z-index:2500;pointer-events:none;border-radius:4px}
+.dock-drop.hidden{display:none}
+.dock-drop .dz{position:absolute;border:1px dashed rgba(34,211,238,.35);background:rgba(34,211,238,.04);border-radius:3px}
+.dock-drop .dz-top{left:25%;right:25%;top:4px;height:22%}
+.dock-drop .dz-bottom{left:25%;right:25%;bottom:4px;height:22%}
+.dock-drop .dz-left{left:4px;width:20%;top:30%;bottom:30%}
+.dock-drop .dz-right{right:4px;width:20%;top:30%;bottom:30%}
+.dock-drop .dz-center{left:30%;right:30%;top:32%;bottom:32%}
+.dock-drop[data-side="1"] .dz-left,.dock-drop[data-side="1"] .dz-right{display:none}
+.dock-drop[data-zone="top"] .dz-top,.dock-drop[data-zone="bottom"] .dz-bottom,.dock-drop[data-zone="left"] .dz-left,.dock-drop[data-zone="right"] .dz-right,.dock-drop[data-zone="center"] .dz-center{border-style:solid;border-color:var(--accent);background:rgba(34,211,238,.22)}
+.dock-drop-preview{position:absolute;background:rgba(34,211,238,.16);border:2px solid var(--accent);border-radius:4px;transition:inset .08s}
+.dock-drop-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:4px 10px;border-radius:6px;background:#06121b;border:1px solid var(--accent);color:var(--accent);font-size:12px;font-weight:600;white-space:nowrap}
+.dock-edge{position:fixed;z-index:2400;width:46px;display:flex;align-items:center;justify-content:center;background:rgba(34,211,238,.06);border:1px dashed rgba(34,211,238,.5);pointer-events:auto}
+.dock-edge span{writing-mode:vertical-rl;font-size:11px;color:var(--accent);letter-spacing:.08em}
+.dock-edge.hot{background:rgba(34,211,238,.25);border-style:solid}
+.dock-edge.hidden{display:none}
+
+/* ultra look */
+body.mode-ultra .dock-head{background:linear-gradient(180deg,#04121d,#020c15);border-bottom-color:#0f2a3c}
+body.mode-ultra .dock-title{color:#7fb8d0}
+body.mode-ultra .dock-panel[data-panel="presence"] .dock-title,body.mode-ultra .dock-panel[data-panel="chat"] .dock-title{color:var(--accent)}
+body.mode-ultra .dock-col-split,body.mode-ultra .dock-row-split,body.mode-ultra .dock-mid-split{background:#0b2233}
+
+/* ============ v1.3.5 Omni panel: face fits its box, status visible, prompt pinned to bottom ============ */
+.dock-body > .presence-host{display:flex;flex-direction:column;position:relative;min-height:0;container-type:size;container-name:omni}
+body.presence-docked .presence-host #assistant-root,
+.presence-host #assistant-root{
+  position:relative!important;inset:auto!important;width:100%!important;height:100%!important;max-height:none!important;min-height:0!important;
+  border:0!important;border-radius:0!important;box-shadow:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;flex:1 1 auto!important;
+  transform:none!important;opacity:1!important;pointer-events:auto!important;
+}
+.presence-host #assistant-root .asst-bar{display:none!important}
+.presence-host .asst-face-wrap{
+  /* height follows the panel (container units), width capped so cover-crop never hides eyes/mouth */
+  --face-h:clamp(96px, 44cqh, 340px);
+  height:var(--face-h)!important;max-height:none!important;aspect-ratio:auto!important;
+  width:min(100%, calc(var(--face-h) * 1.25))!important;margin:0 auto;flex:0 0 auto!important;
+  position:relative;overflow:hidden;
+}
+.presence-host .asst-face{object-fit:cover;object-position:50% 38%}
+.presence-host .asst-status{flex:0 0 22px!important;height:22px!important;position:relative;z-index:6;width:100%}
+.presence-host .asst-omni-btn{flex:0 0 auto;margin:4px 8px!important}
+.presence-host .asst-prompt,.presence-host .asst-prompt.hidden{
+  display:flex!important;flex:1 1 auto!important;min-height:0!important;flex-direction:column;padding:0 8px 8px!important;
+}
+.presence-host .asst-prompt-log{flex:1 1 auto!important;min-height:24px!important;max-height:none!important;overflow:auto}
+.presence-host .asst-prompt-row{flex:0 0 auto;margin-top:auto}
+@container omni (max-height: 330px){
+  .presence-host .asst-omni-btn{display:none}
+  .presence-host .asst-face-wrap{--face-h:clamp(80px, 40cqh, 340px)}
+}
+
+.asst-face-wrap .asst-face,.asst-face-wrap .asst-digital{transform:translateY(var(--bob,0px))}
+.dock-body .editor-meta{white-space:nowrap;overflow:hidden}
+.dock-body .editor-meta span{flex-shrink:0}

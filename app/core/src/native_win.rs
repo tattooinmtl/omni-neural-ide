@@ -22,12 +22,12 @@ pub fn run_native(url: String, title: String, user_data_dir: PathBuf) -> Result<
     let mut wb = WindowBuilder::new()
         .with_title(title)
         .with_inner_size(LogicalSize::new(1168.0, 784.0));
-    if let Some(ref icon) = icon {
-        wb = wb
-            .with_window_icon(Some(icon.clone()))
-            .with_taskbar_icon(Some(icon.clone()));
+    if let Some((small, big)) = icon {
+        wb = wb.with_window_icon(Some(small)).with_taskbar_icon(Some(big));
     }
     let window = wb.build(&event_loop).map_err(|e| format!("create window: {e}"))?;
+    // Belt and braces: WM_SETICON small + big straight from the exe's embedded resource #1.
+    set_icons_from_resource(window.hwnd());
 
     apply_dark_caption(window.hwnd());
 
@@ -70,21 +70,46 @@ unsafe fn dwm_set(hwnd: isize, attr: u32, ptr: *const u8, size: u32) -> i32 {
     DwmSetWindowAttribute(hwnd, attr, ptr, size)
 }
 
-fn load_window_icon() -> Option<Icon> {
+/// (small caption icon, big taskbar/Alt-Tab icon). Embedded resource #1 first (always present in
+/// omni-core.exe via build.rs), then the .ico next to the install. PNG via LoadImage does NOT work.
+fn load_window_icon() -> Option<(Icon, Icon)> {
+    use tao::dpi::PhysicalSize;
+    if let (Ok(s), Ok(b)) = (
+        Icon::from_resource(1, Some(PhysicalSize::new(32, 32))),
+        Icon::from_resource(1, Some(PhysicalSize::new(256, 256))),
+    ) {
+        return Some((s, b));
+    }
     let candidates = [
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("..").join("assets").join("omni-icon-256.png"))),
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("omni-icon-256.png"))),
-        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../assets/omni-icon-256.png")),
-        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../launcher/embed/omni-icon-256.png")),
+        std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("omni.ico"))),
+        std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("..").join("assets").join("omni.ico"))),
     ];
     for c in candidates.into_iter().flatten() {
-        if let Ok(icon) = Icon::from_path(&c, None) {
-            return Some(icon);
+        if let (Ok(s), Ok(b)) = (
+            Icon::from_path(&c, Some(PhysicalSize::new(32, 32))),
+            Icon::from_path(&c, Some(PhysicalSize::new(256, 256))),
+        ) {
+            return Some((s, b));
         }
     }
     None
+}
+
+fn set_icons_from_resource(hwnd: isize) {
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetSystemMetrics, LoadImageW, SendMessageW, ICON_BIG, ICON_SMALL, IMAGE_ICON, LR_DEFAULTCOLOR,
+        SM_CXICON, SM_CXSMICON, WM_SETICON,
+    };
+    unsafe {
+        let hinst = GetModuleHandleW(std::ptr::null());
+        let res = 1usize as *const u16; // MAKEINTRESOURCE(1)
+        let cs = GetSystemMetrics(SM_CXSMICON);
+        let cb = GetSystemMetrics(SM_CXICON);
+        let small = LoadImageW(hinst, res, IMAGE_ICON, cs, cs, LR_DEFAULTCOLOR);
+        let big = LoadImageW(hinst, res, IMAGE_ICON, cb, cb, LR_DEFAULTCOLOR);
+        let h = hwnd as windows_sys::Win32::Foundation::HWND;
+        if !small.is_null() { SendMessageW(h, WM_SETICON, ICON_SMALL as usize, small as isize); }
+        if !big.is_null() { SendMessageW(h, WM_SETICON, ICON_BIG as usize, big as isize); }
+    }
 }

@@ -1,14 +1,14 @@
-; OMNI-CODE v1.3.4 per-user Windows installer (no admin)
+; OMNI-CODE v1.3.5 per-user Windows installer (no admin)
 ; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.3.4"
+!define PRODUCT_VERSION "1.3.5"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.3.4.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.3.5.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user

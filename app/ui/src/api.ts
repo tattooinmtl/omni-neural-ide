@@ -144,6 +144,7 @@ export const api = {
   termExec: (cmd: string, cwd?: string) =>
     req<{ ok: boolean; stdout: string; stderr: string; code: number; cwd: string }>('/api/term/exec', { method: 'POST', body: JSON.stringify({ cmd, cwd }) }),
   storeInfo: () => req<{ db: string; scheme: string; warning: string | null; migrated_plaintext: string | null; run_code: string }>('/api/store/info'),
+  getSetting: (key: string) => req<{ key: string; value: any }>(`/api/store/setting?key=${encodeURIComponent(key)}`),
   setSetting: (key: string, value: unknown) => req<{ ok: boolean }>('/api/store/setting', { method: 'POST', body: JSON.stringify({ key, value }) }),
   keysExport: () => req<{ ok: boolean; path: string; count: number }>('/api/keys/export', { method: 'POST', body: '{}' }),
   keysImport: (path: string) => req<{ ok: boolean; imported: number }>('/api/keys/import', { method: 'POST', body: JSON.stringify({ path }) }),

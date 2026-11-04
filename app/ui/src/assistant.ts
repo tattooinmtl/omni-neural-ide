@@ -378,12 +378,13 @@ export class FloatingAssistant {
     const freeze = this.root.dataset.freezeFace === '1';
     if (freeze) {
       const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement;
-      if (wrap) wrap.style.transform = 'none';
+      if (wrap) wrap.style.setProperty('--bob', '0px');
       return; // screenshots / debug: do not mutate face layers
     }
     const t = (performance.now() - this.t0) / 1000;
     const wrap = this.root.querySelector('#asst-face-wrap') as HTMLElement;
-    if (wrap) wrap.style.transform = `translateY(${Math.sin(t * 0.7) * 1.2}px)`;
+    // idle bob moves the layers INSIDE the clipped face box (never over the status line)
+    if (wrap) wrap.style.setProperty('--bob', `${(Math.sin(t * 0.7) * 1.2).toFixed(2)}px`);
     const glow = this.root.querySelector('.asst-glow') as HTMLElement;
     if (glow) glow.style.opacity = String(0.28 + Math.sin(t * 1.6) * 0.1 + (this.talking ? 0.2 : 0));
     // Lip frames driven by analyser / boundary events via setMouthLevel; tick only clears when idle
@@ -630,7 +631,11 @@ export class FloatingAssistant {
   }
 
   show() { this.root.classList.remove('assistant-hidden'); this.cfg.show = true; }
-  hide() { this.root.classList.add('assistant-hidden'); }
+  hide() {
+    const dock = (window as any).__omniDock;
+    if (this.root.classList.contains('docked') && dock) { dock.close('presence'); return; }
+    this.root.classList.add('assistant-hidden');
+  }
   greet() {
     const line = 'Hey. Omni here — tap Omni anytime.';
     void this.speak(line);

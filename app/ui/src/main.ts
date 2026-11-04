@@ -12,7 +12,8 @@ import { HarnessController } from './harness';
 import { MOODS, nearestMood } from './moods';
 import { SettingsView } from './settings';
 import { setMenuHandler, bindMenubar, showContextMenu, installGlobalMenuGuards, buildMenus, tabContextItems, explorerContextItems, editorContextItems, setMenuIcons, type MenuItem } from './menus';
-import { loadLayout, saveLayout, resetLayout, showPanel, togglePanel, sideDockVisible, bottomVisible, type LayoutState, type PanelId } from './layout';
+import type { PanelId } from './layout';
+import { DockManager, sanitize, preset, type DockLayout, type PresetId } from './dock';
 import { TerminalPanel, ConsolePanel } from './terminal';
 
 const params = new URLSearchParams(location.search);
@@ -33,7 +34,7 @@ let cursor = { line: 1, col: 1 };
 let driftMode: 'warn' | 'pause' = 'warn';
 let dnd = false;
 let timers: { id: number; at: number; text: string }[] = [];
-let layoutState: LayoutState = loadLayout((params.get('mode') as Mode) || 'plain');
+let dock: DockManager;
 let terminal: TerminalPanel | null = null;
 let consolePanel: ConsolePanel | null = null;
 let clipboardPath: { path: string; cut: boolean } | null = null;
@@ -93,6 +94,9 @@ function shell() {
         <button data-act="settings" title="Settings">${svg.gear}</button>
       </div>
     </div>
+    <div class="dock-root" id="dock-root"></div>
+  </div>
+  <div id="panel-stash" hidden>
     <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <span class="label">EXPLORER</span>
@@ -110,7 +114,6 @@ function shell() {
         <div class="sidebar-section" data-panel="timeline">▸ TIMELINE</div>
       </div>
     </div>
-    <div class="resizer-v" id="resize-side"></div>
     <div class="editor-col" id="editor-col">
       <div class="tabbar" id="tabbar"></div>
       <div class="breadcrumbs" id="breadcrumbs"><span class="crumb">No file open</span></div>
@@ -121,37 +124,16 @@ function shell() {
         <span id="meta-lang">Plain Text</span><span>Prettier</span>
       </div>
     </div>
-    <div class="resizer-v" id="resize-chat"></div>
     <div class="chat" id="chat"></div>
-    <div class="resizer-v" id="resize-presence"></div>
-    <div class="presence-col" id="presence-col">
-      <div class="presence-host" id="presence-host"></div>
-      <div class="side-dock" id="side-dock">
-        <div class="side-dock-tabs" id="side-dock-tabs">
-          <button type="button" data-stab="terminal" class="active">Terminal</button>
-          <button type="button" data-stab="console">Console</button>
-        </div>
-        <div class="side-dock-body">
-          <div class="side-pane active" id="side-pane-terminal"></div>
-          <div class="side-pane" id="side-pane-console"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="resizer-h" id="resize-bottom"></div>
-  <div class="bottom-dock" id="bottom-dock">
-    <div class="bottom-tabs" id="bottom-tabs">
-      <button data-btab="terminal" class="active">Terminal</button>
-      <button data-btab="console">Console</button>
-      <button data-btab="problems">Problems</button>
-      <button data-btab="output">Output</button>
-    </div>
-    <div class="bottom-body">
-      <div class="bottom-pane active" id="pane-terminal"></div>
-      <div class="bottom-pane" id="pane-console"></div>
-      <div class="bottom-pane" id="pane-problems"><div class="panel-placeholder">No problems detected.</div></div>
-      <div class="bottom-pane" id="pane-output"><div class="panel-placeholder">Output channel.</div></div>
-    </div>
+    <div class="presence-host" id="presence-host"></div>
+    <div class="dock-pane" id="dock-terminal"></div>
+    <div class="dock-pane" id="dock-console"></div>
+    <div class="dock-pane" id="pane-problems"><div class="panel-placeholder">No problems detected.</div></div>
+    <div class="dock-pane" id="pane-output"><div class="panel-placeholder">Output channel.</div></div>
+    <div class="dock-pane" id="pane-search"><div class="panel-placeholder">Search across files — use <b>Ctrl+Shift+F</b>, or Find (<b>Ctrl+F</b>) in the editor.</div></div>
+    <div class="dock-pane" id="pane-scm"><div class="panel-placeholder">Source control · branch <b>main</b> · no pending changes.</div></div>
+    <div class="dock-pane" id="pane-outline"><div class="panel-placeholder">Outline — open a file to see its symbols.</div></div>
+    <div class="dock-pane" id="pane-timeline"><div class="panel-placeholder">Timeline — local history for the active file.</div></div>
   </div>
   </div>
   <div class="statusbar">
@@ -170,9 +152,9 @@ function shell() {
       <span class="item plain-only">3.11.4 64-bit</span>
     </div>
     <div class="right">
-      <span class="item plain-only">OMNI-CODE 1.3.4</span>
+      <span class="item plain-only">OMNI-CODE 1.3.5</span>
       <span class="badge plain-only">Insiders</span>
-      <span class="item ultra-only">OMNI 1.3.4</span>
+      <span class="item ultra-only">OMNI 1.3.5</span>
       <span class="item ultra-only">🔔</span>
       <span class="item ultra-only">↻</span>
       <span class="item ultra-only">▶</span>
@@ -316,7 +298,7 @@ function bindChrome() {
     document.getElementById('overlay')?.classList.add('hidden');
   });
   document.querySelector('[data-act="toggle-side"]')?.addEventListener('click', () => {
-    document.getElementById('sidebar')?.classList.toggle('hidden');
+    dock.toggle('explorer'); installMenus();
   });
   document.querySelector('[data-act="open"]')?.addEventListener('click', async () => {
     const path = prompt('Folder path to open', projectRoot || FIX_ROOT + '/' + mode);
@@ -345,25 +327,11 @@ function bindChrome() {
   };
   harness.driftMode = driftMode;
 
-  setupResize(document.getElementById('resize-side')!, document.getElementById('sidebar')!, 160, 420, false, (w) => { layoutState.widths.sidebar = w; saveLayout(mode, layoutState); });
-  setupResize(document.getElementById('resize-chat')!, document.getElementById('chat')!, 260, 480, true, (w) => { layoutState.widths.chat = w; saveLayout(mode, layoutState); });
-  const rp = document.getElementById('resize-presence');
-  const pc = document.getElementById('presence-col');
-  if (rp && pc) setupResize(rp, pc, 220, 480, false, (w) => { layoutState.widths.presence = w; saveLayout(mode, layoutState); });
-  setupBottomResize();
-  document.getElementById('bottom-tabs')?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('button[data-btab]') as HTMLElement | null;
-    if (!btn) return;
-    const id = btn.dataset.btab as LayoutState['bottomTab'];
-    layoutState.bottomTab = id;
-    layoutState = showPanel(layoutState, id);
-    applyLayout();
-  });
   document.querySelector('[data-act="new-file"]')?.addEventListener('click', () => handleMenu('file.new'));
   document.querySelector('[data-act="new-folder"]')?.addEventListener('click', () => handleMenu('file.newFolder'));
-  document.querySelector('[data-act="explorer"]')?.addEventListener('click', () => { layoutState.visible.explorer = true; applyLayout(); });
-  document.querySelector('[data-act="search"]')?.addEventListener('click', () => { layoutState = showPanel(layoutState, 'search'); applyLayout(); alert('Search panel — use Ctrl+P / Find for now'); });
-  document.querySelector('[data-act="git"]')?.addEventListener('click', () => { layoutState = showPanel(layoutState, 'scm'); applyLayout(); });
+  document.querySelector('[data-act="explorer"]')?.addEventListener('click', () => { dock.toggle('explorer'); installMenus(); });
+  document.querySelector('[data-act="search"]')?.addEventListener('click', () => { dock.open('search'); installMenus(); });
+  document.querySelector('[data-act="git"]')?.addEventListener('click', () => { dock.open('scm'); installMenus(); });
 
   window.addEventListener('keydown', async e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -386,44 +354,6 @@ function bindChrome() {
       if (goal) harness.runIntake(goal);
     }
   });
-}
-
-function setupResize(handle: HTMLElement, target: HTMLElement, min: number, max: number, reverse: boolean, onDone?: (w: number) => void) {
-  let startX = 0, startW = 0;
-  handle.addEventListener('pointerdown', e => {
-    startX = e.clientX; startW = target.getBoundingClientRect().width;
-    handle.setPointerCapture(e.pointerId);
-  });
-  handle.addEventListener('pointermove', e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    const dx = e.clientX - startX;
-    const w = Math.min(max, Math.max(min, reverse ? startW - dx : startW + dx));
-    target.style.width = `${w}px`;
-  });
-  handle.addEventListener('pointerup', e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    handle.releasePointerCapture(e.pointerId);
-    onDone?.(target.getBoundingClientRect().width);
-  });
-}
-
-function setupBottomResize() {
-  const handle = document.getElementById('resize-bottom');
-  const dock = document.getElementById('bottom-dock');
-  if (!handle || !dock) return;
-  let startY = 0, startH = 0;
-  handle.addEventListener('pointerdown', e => {
-    startY = e.clientY; startH = dock.getBoundingClientRect().height;
-    handle.setPointerCapture(e.pointerId);
-  });
-  handle.addEventListener('pointermove', e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    const dy = startY - e.clientY;
-    const h = Math.min(window.innerHeight * 0.5, Math.max(120, startH + dy));
-    dock.style.height = `${h}px`;
-    layoutState.bottomH = h;
-  });
-  handle.addEventListener('pointerup', () => saveLayout(mode, layoutState));
 }
 
 async function openProject(path: string) {
@@ -510,91 +440,72 @@ function dockPresence() {
   host.appendChild(root);
   document.body.classList.add('presence-docked');
   root.classList.remove('assistant-hidden', 'assistant-tucked');
-  // Always show Omni chat + prompt when docked (fills column with Terminal below)
   (assistant as any)?.setDocked?.(true);
 }
 
-function applyLayout() {
-  const s = layoutState;
-  const side = document.getElementById('sidebar');
-  const chatEl = document.getElementById('chat');
-  const presence = document.getElementById('presence-col');
-  const bottom = document.getElementById('bottom-dock');
-  const resizePres = document.getElementById('resize-presence');
-  const resizeChat = document.getElementById('resize-chat');
-  const resizeSide = document.getElementById('resize-side');
-  if (side) {
-    side.classList.toggle('hidden', !s.visible.explorer);
-    side.style.width = `${s.widths.sidebar}px`;
-  }
-  if (chatEl) {
-    chatEl.style.display = s.visible.chat ? '' : 'none';
-    chatEl.style.width = `${s.widths.chat}px`;
-  }
-  if (presence) {
-    presence.classList.toggle('hidden', !s.visible.presence);
-    presence.style.width = `${s.widths.presence}px`;
-  }
-  if (resizePres) resizePres.style.display = s.visible.presence ? '' : 'none';
-  if (resizeChat) resizeChat.style.display = s.visible.chat ? '' : 'none';
-  if (resizeSide) resizeSide.style.display = s.visible.explorer ? '' : 'none';
-  // Side dock (Terminal/Console under Omni) — default placement
-  const sideDock = document.getElementById('side-dock');
-  const showSide = sideDockVisible(s) && s.visible.presence;
-  if (sideDock) {
-    sideDock.classList.toggle('hidden', !showSide);
-    document.querySelectorAll('#side-dock-tabs button').forEach((b) => {
-      const id = (b as HTMLElement).dataset.stab!;
-      b.classList.toggle('active', id === s.sideTab);
-      (b as HTMLElement).style.display = s.visible[id as PanelId] ? '' : 'none';
-    });
-    document.querySelectorAll('.side-pane').forEach((p) => {
-      p.classList.toggle('active', p.id === `side-pane-${s.sideTab}`);
-    });
-  }
-
-  const showBottom = bottomVisible(s);
-  if (bottom) {
-    bottom.classList.toggle('visible', showBottom);
-    bottom.style.height = `${s.bottomH}px`;
-  }
-  const rb = document.getElementById('resize-bottom');
-  if (rb) rb.style.display = showBottom ? '' : 'none';
-  document.querySelectorAll('#bottom-tabs button').forEach((b) => {
-    const id = (b as HTMLElement).dataset.btab!;
-    b.classList.toggle('active', id === s.bottomTab);
-    const show = (id === 'problems' || id === 'output') ? !!s.visible[id as PanelId]
-      : (s.termPlacement === 'bottom' && !!s.visible[id as PanelId]);
-    (b as HTMLElement).style.display = show || id === s.bottomTab ? '' : 'none';
+const LAYOUT_KEY = 'omni.layout.v3';
+let layoutWrite: Promise<void> = Promise.resolve();
+function loadDockLayout(): DockLayout {
+  try { return sanitize(JSON.parse(localStorage.getItem(`${LAYOUT_KEY}.${mode}`) || 'null'), mode); }
+  catch { return preset('default', mode); }
+}
+function saveDockLayout(l: DockLayout) {
+  localStorage.setItem(`${LAYOUT_KEY}.${mode}`, JSON.stringify(l));
+  // persist to SQLite settings (data\omni.db) — survives WebView cache wipes / reinstalls
+  // serialized writes; value = both modes straight from the local cache (no read-modify-write race)
+  layoutWrite = layoutWrite.then(async () => {
+    const all: Record<string, unknown> = {};
+    for (const m of ['plain', 'ultra']) {
+      try { const v = localStorage.getItem(`${LAYOUT_KEY}.${m}`); if (v) all[m] = JSON.parse(v); } catch {}
+    }
+    try { await api.setSetting('layout', all); } catch { /* offline/demo */ }
   });
-  document.querySelectorAll('.bottom-pane').forEach((p) => {
-    p.classList.toggle('active', p.id === `pane-${s.bottomTab}`);
-  });
-  document.querySelectorAll('[data-panel="outline"]').forEach((el) => {
-    (el as HTMLElement).style.display = s.visible.outline ? '' : 'none';
-  });
-  document.querySelectorAll('[data-panel="timeline"]').forEach((el) => {
-    (el as HTMLElement).style.display = s.visible.timeline ? '' : 'none';
-  });
-  ensureTermPanels();
-  saveLayout(mode, s);
+  installMenus();
 }
 
-function ensureTermPanels() {
-  const side = layoutState.termPlacement === 'side';
-  if (layoutState.visible.terminal) {
-    const host = document.getElementById(side ? 'side-pane-terminal' : 'pane-terminal');
-    if (host) {
-      if (!terminal || terminal.el !== host) { terminal = new TerminalPanel(host, projectRoot || ''); (window as any).__omniTerminal = terminal; }
-      else if (projectRoot) terminal.setCwd(projectRoot);
-    }
+function panelContent(id: PanelId): HTMLElement {
+  const byId: Record<PanelId, string> = {
+    explorer: 'sidebar', editor: 'editor-col', chat: 'chat', presence: 'presence-host',
+    terminal: 'dock-terminal', console: 'dock-console', problems: 'pane-problems', output: 'pane-output',
+    search: 'pane-search', scm: 'pane-scm', outline: 'pane-outline', timeline: 'pane-timeline',
+  };
+  return document.getElementById(byId[id])!;
+}
+
+function ensureTermPanels(id?: PanelId) {
+  if ((!id || id === 'terminal') && dock?.isOpen('terminal')) {
+    const host = document.getElementById('dock-terminal')!;
+    if (!terminal) { terminal = new TerminalPanel(host, projectRoot || ''); (window as any).__omniTerminal = terminal; }
   }
-  if (layoutState.visible.console) {
-    const host = document.getElementById(side ? 'side-pane-console' : 'pane-console');
-    if (host) {
-      if (!consolePanel || (consolePanel as any).el !== host) consolePanel = new ConsolePanel(host);
-    }
+  if ((!id || id === 'console') && dock?.isOpen('console')) {
+    const host = document.getElementById('dock-console')!;
+    if (!consolePanel) consolePanel = new ConsolePanel(host);
   }
+}
+
+function initDock() {
+  const rootEl = document.getElementById('dock-root')!;
+  dock = new DockManager(rootEl, mode, loadDockLayout(), {
+    content: panelContent,
+    onChange: saveDockLayout,
+    onShown: (id) => {
+      if (id === 'terminal' || id === 'console') ensureTermPanels(id);
+      if (id === 'terminal') setTimeout(() => terminal?.focus(), 30);
+    },
+    onClosed: () => installMenus(),
+  });
+  (window as any).__omniDock = dock;
+  dock.render();
+  ensureTermPanels();
+  // SQLite copy wins when it differs (e.g. localStorage cleared by a WebView2 reset)
+  api.getSetting('layout').then((r) => {
+    const remote = r?.value?.[mode];
+    if (remote && JSON.stringify(sanitize(remote, mode)) !== JSON.stringify(dock.layout)) {
+      dock.setLayout(sanitize(remote, mode));
+      localStorage.setItem(`${LAYOUT_KEY}.${mode}`, JSON.stringify(dock.layout));
+      installMenus();
+    }
+  }).catch(() => {});
 }
 
 async function runUpdateFromUi() {
@@ -696,33 +607,27 @@ async function handleMenu(id: string) {
     case 'edit.copy': document.execCommand('copy'); break;
     case 'edit.paste': document.execCommand('paste'); break;
     case 'edit.find': window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true })); break;
-    case 'view.explorer': layoutState = togglePanel(layoutState, 'explorer'); applyLayout(); break;
-    case 'view.terminal': layoutState = showPanel(layoutState, 'terminal'); layoutState.termPlacement = 'side'; layoutState.sideTab = 'terminal'; applyLayout(); terminal?.focus(); break;
-    case 'view.console': layoutState = showPanel(layoutState, 'console'); layoutState.termPlacement = 'side'; layoutState.sideTab = 'console'; applyLayout(); break;
-    case 'view.presence': layoutState = togglePanel(layoutState, 'presence'); applyLayout(); break;
+    case 'view.explorer': dock.toggle('explorer'); break;
+    case 'view.terminal': dock.open('terminal'); break;
+    case 'view.console': dock.open('console'); break;
+    case 'view.presence': dock.toggle('presence'); break;
     case 'view.fullscreen': {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
       else await document.exitFullscreen?.();
       break;
     }
-    case 'term.new': layoutState = showPanel(layoutState, 'terminal'); layoutState.termPlacement = 'side'; layoutState.sideTab = 'terminal'; applyLayout(); terminal?.focus(); break;
+    case 'term.new': dock.open('terminal'); break;
     case 'term.clear': terminal?.clear(); break;
-    case 'app.resetLayout': layoutState = resetLayout(mode); applyLayout(); break;
+    case 'app.resetLayout': dock.applyPreset('default'); break;
+    case 'layout.default': case 'layout.focus': case 'layout.grid': dock.applyPreset(id.slice(7) as PresetId); break;
+    case 'layout.floatOmni': dock.float('presence'); break;
     case 'app.settings': SettingsView.open(document.body); break;
-    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.4`); break;
+    case 'help.about': alert(`OMNI-CODE ${mode === 'ultra' ? 'Ultra ' : ''}v1.3.5`); break;
     case 'help.docs': window.open('https://github.com/tattooinmtl/omni-neural-ide', '_blank'); break;
     default:
       if (id.startsWith('panel.')) {
         const pid = id.slice(6) as PanelId;
-        layoutState = showPanel(layoutState, pid);
-        if (pid === 'terminal' || pid === 'console') {
-          layoutState.termPlacement = 'side';
-          layoutState.sideTab = pid;
-        }
-        if (pid === 'problems' || pid === 'output') {
-          layoutState.bottomTab = pid;
-        }
-        applyLayout();
+        dock.toggle(pid);
         installMenus();
       }
   }
@@ -733,7 +638,7 @@ function installMenus() {
   if (!bar) return;
   setMenuHandler(handleMenu);
   installGlobalMenuGuards();
-  const menus = buildMenus({ ultra: mode === 'ultra', panels: layoutState.visible as any });
+  const menus = buildMenus({ ultra: mode === 'ultra', panels: (dock?.visibleMap() || {}) as any });
   bindMenubar(bar, menus);
 }
 
@@ -932,31 +837,15 @@ async function boot() {
   (window as any).__codingChat = chat;
   (assistant as any).moods = MOODS;
   setTimeout(() => assistant.greet(), 500);
-  layoutState = loadLayout(mode);
-  applyLayout();
+  dockPresence();
+  initDock();
   installMenus();
   installContextMenus();
-  document.getElementById('side-dock-tabs')?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('button[data-stab]') as HTMLElement | null;
-    if (!btn) return;
-    const tab = btn.dataset.stab as 'terminal' | 'console';
-    layoutState.visible[tab] = true;
-    layoutState.sideTab = tab;
-    layoutState.termPlacement = 'side';
-    applyLayout();
-    installMenus();
-  });
-  dockPresence();
   // periodic presence remarks
   setInterval(() => {
     try { assistant.maybeVolunteer('User is coding in OMNI-CODE. Offer a short witty remark or stay silent.'); } catch {}
   }, 90000);
   bindChrome();
-  // Exact mock panel seams (activity|explorer|editor|chat)
-  const side = document.getElementById('sidebar');
-  const chatEl = document.getElementById('chat');
-  if (side) side.style.width = mode === 'ultra' ? '197px' : '207px';
-  if (chatEl) chatEl.style.width = mode === 'ultra' ? '341px' : '348px';
   document.documentElement.style.setProperty('--activity-w', mode === 'ultra' ? '50px' : '48px');
 
   if (demo) {

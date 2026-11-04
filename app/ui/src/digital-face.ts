@@ -221,18 +221,45 @@ export class DigitalFace {
     return { amp, bands };
   }
 
+  /**
+   * Where the face image is actually drawn inside the wrap (canvas px), honouring object-fit/object-position.
+   * Panels are fractions of the IMAGE, so eyes/mouth track the face at any panel size.
+   */
+  imageRect(): { x: number; y: number; w: number; h: number } {
+    const W = this.canvas.width, H = this.canvas.height;
+    const img = (this.wrap.querySelector('.asst-face.active') || this.wrap.querySelector('.asst-face')) as HTMLImageElement | null;
+    const nw = img?.naturalWidth || 0, nh = img?.naturalHeight || 0;
+    if (!img || !nw || !nh) return { x: 0, y: 0, w: W, h: H };
+    const cs = getComputedStyle(img);
+    const fit = cs.objectFit || 'fill';
+    let rw = W, rh = H;
+    if (fit === 'cover' || fit === 'contain' || fit === 'scale-down') {
+      const s = fit === 'cover' ? Math.max(W / nw, H / nh) : Math.min(W / nw, H / nh, fit === 'scale-down' ? 1 : Infinity);
+      rw = nw * s; rh = nh * s;
+    } else if (fit === 'none') { rw = nw; rh = nh; }
+    const [px, py] = (cs.objectPosition || '50% 50%').split(/\s+/);
+    const frac = (v: string | undefined, free: number) => {
+      if (!v) return free * 0.5;
+      if (v.endsWith('%')) return free * (parseFloat(v) / 100);
+      if (v === 'center') return free * 0.5;
+      if (v === 'left' || v === 'top') return 0;
+      if (v === 'right' || v === 'bottom') return free;
+      const n = parseFloat(v); return isNaN(n) ? free * 0.5 : n * (W / Math.max(1, this.wrap.clientWidth));
+    };
+    return { x: frac(px, W - rw), y: frac(py, H - rh), w: rw, h: rh };
+  }
+
   private panelRect(p: Panel) {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const ir = this.imageRect();
     return {
-      x: (p.cx - p.rx) * w,
-      y: (p.cy - p.ry) * h,
-      w: p.rx * 2 * w,
-      h: p.ry * 2 * h,
-      cx: p.cx * w,
-      cy: p.cy * h,
-      rx: p.rx * w,
-      ry: p.ry * h,
+      x: ir.x + (p.cx - p.rx) * ir.w,
+      y: ir.y + (p.cy - p.ry) * ir.h,
+      w: p.rx * 2 * ir.w,
+      h: p.ry * 2 * ir.h,
+      cx: ir.x + p.cx * ir.w,
+      cy: ir.y + p.cy * ir.h,
+      rx: p.rx * ir.w,
+      ry: p.ry * ir.h,
     };
   }
 
@@ -299,7 +326,7 @@ export class DigitalFace {
     const { amp, bands } = this.audioLevels();
     const pal = moodPalette(this.mood, this.opts.eyeColorOverride);
     // finer grid: base pixelSize 2, scale gently with canvas
-    const px = Math.max(1.5, this.opts.pixelSize * (w / 420));
+    const px = Math.max(1.5, this.opts.pixelSize * (this.imageRect().w / 420));
     const panels = this.panels();
 
     this.drawEye(panels.leftEye, t, pal, px, amp, -1);

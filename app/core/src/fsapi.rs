@@ -119,7 +119,7 @@ pub async fn store_info(State(st): S) -> Json<serde_json::Value> {
 pub struct SettingIn { pub key: String, pub value: serde_json::Value }
 
 pub async fn set_setting(State(st): S, Json(b): Json<SettingIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    if !["run_code", "omni_config", "ui"].contains(&b.key.as_str()) {
+    if !["run_code", "omni_config", "ui", "layout"].contains(&b.key.as_str()) {
         return Err((StatusCode::BAD_REQUEST, "unknown setting".into()));
     }
     st.store.set_setting(&b.key, &b.value).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -128,6 +128,9 @@ pub async fn set_setting(State(st): S, Json(b): Json<SettingIn>) -> Result<Json<
 
 pub async fn get_setting(State(st): S, Query(q): Query<std::collections::HashMap<String, String>>) -> Json<serde_json::Value> {
     let k = q.get("key").cloned().unwrap_or_default();
+    if !["run_code", "omni_config", "ui", "layout"].contains(&k.as_str()) {
+        return Json(serde_json::json!({"key": k, "value": null}));
+    }
     Json(serde_json::json!({"key": k, "value": st.store.get_setting(&k)}))
 }
 
