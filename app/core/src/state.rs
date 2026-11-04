@@ -25,6 +25,8 @@ pub struct AppState {
     pub delegate_log: RwLock<Vec<crate::delegate::DelegateOut>>,
     pub omni_history: RwLock<Vec<(String,String)>>,
     pub runs: crate::agent_run::RunRegistry,
+    pub store: crate::secrets::Store,
+    pub migrated_file: RwLock<Option<PathBuf>>,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -68,7 +70,9 @@ pub struct RateCounters {
 
 impl AppState {
     pub fn new(mode: &str, data_dir: PathBuf, project: Option<PathBuf>) -> anyhow::Result<Self> {
-        let keys = load_keys(&data_dir);
+        let store = crate::secrets::Store::open(&data_dir)?;
+        let migrated = crate::secrets::migrate_plaintext(&store, &data_dir).or_else(|| store.meta("migrated_from").map(PathBuf::from).filter(|p| p.exists()));
+        let keys = store.load_keys();
         let max_agents = keys.max_agents.clamp(1, 4) as usize;
         let state = Self {
             mode: RwLock::new(mode.to_string()),
@@ -81,6 +85,8 @@ impl AppState {
             delegate_log: RwLock::new(Vec::new()),
             omni_history: RwLock::new(Vec::new()),
             runs: crate::agent_run::RunRegistry::default(),
+            store,
+            migrated_file: RwLock::new(migrated),
         };
         if let Some(p) = project {
             state.open_project(&p)?;
@@ -111,26 +117,10 @@ impl AppState {
         Ok(tree)
     }
 
-    pub fn keys_path(&self) -> PathBuf {
-        self.data_dir.join("keys").join("providers.json")
-    }
-}
-
-pub fn load_keys(data_dir: &Path) -> ProviderKeys {
-    let p = data_dir.join("keys").join("providers.json");
-    std::fs::read_to_string(p)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
 }
 
 pub fn save_keys(state: &AppState, keys: &ProviderKeys) -> anyhow::Result<()> {
-    let p = state.keys_path();
-    if let Some(parent) = p.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(p, serde_json::to_string_pretty(keys)?)?;
-    Ok(())
+    state.store.save_keys(keys)
 }
 
 fn build_tree(path: &Path, depth: usize, max_depth: usize) -> anyhow::Result<TreeNode> {

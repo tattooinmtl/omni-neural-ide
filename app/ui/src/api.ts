@@ -143,6 +143,16 @@ export const api = {
     req<{ ok: boolean }>('/api/fs/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
   termExec: (cmd: string, cwd?: string) =>
     req<{ ok: boolean; stdout: string; stderr: string; code: number; cwd: string }>('/api/term/exec', { method: 'POST', body: JSON.stringify({ cmd, cwd }) }),
+  storeInfo: () => req<{ db: string; scheme: string; warning: string | null; migrated_plaintext: string | null; run_code: string }>('/api/store/info'),
+  setSetting: (key: string, value: unknown) => req<{ ok: boolean }>('/api/store/setting', { method: 'POST', body: JSON.stringify({ key, value }) }),
+  keysExport: () => req<{ ok: boolean; path: string; count: number }>('/api/keys/export', { method: 'POST', body: '{}' }),
+  keysImport: (path: string) => req<{ ok: boolean; imported: number }>('/api/keys/import', { method: 'POST', body: JSON.stringify({ path }) }),
+  keysWipeMigrated: () => req<{ ok: boolean; wiped?: string; detail?: string }>('/api/keys/wipe-migrated', { method: 'POST', body: '{}' }),
+  pythonStatus: () => req<any>('/api/python/status'),
+  pythonSetup: () => req<any>('/api/python/setup', { method: 'POST', body: '{}' }),
+  pythonRun: (body: { code?: string; script?: string; args?: string[]; timeout_ms?: number }) => req<any>('/api/python/run', { method: 'POST', body: JSON.stringify(body) }),
+  pythonPip: (packages: string[], confirm: boolean) => req<any>('/api/python/pip', { method: 'POST', body: JSON.stringify({ packages, confirm }) }),
+  pythonTest: (path?: string) => req<any>('/api/python/test', { method: 'POST', body: JSON.stringify({ path }) }),
   mcpStatus: () => req<any>('/api/mcp/status'),
   mcpTest: (which: 'search' | 'computer') =>
     req<any>('/api/mcp/test', { method: 'POST', body: JSON.stringify({ which }) }),

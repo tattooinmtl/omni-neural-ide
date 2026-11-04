@@ -282,6 +282,7 @@ export class ChatPanel {
         this.liveCost = r.usage.cost_usd;
         this.liveElapsed = r.usage.elapsed_ms;
       }
+      if ((r as any).python) (window as any).__omniTerminal?.printPython?.('agent python', (r as any).python);
       const files = r.files_written || [];
       if (files.length) this.onFilesWritten?.(files);
       let content = r.content || '';

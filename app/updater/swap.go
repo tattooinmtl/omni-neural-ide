@@ -64,6 +64,9 @@ func main() {
 }
 
 func swapDir(stage, live, backup string) error {
+	if err := assertSwapTarget(filepath.Dir(live), live); err != nil {
+		return err
+	}
 	if _, err := os.Stat(stage); err != nil {
 		return nil
 	}
@@ -127,4 +130,14 @@ func copyFile(src, dst string) error {
 	defer out.Close()
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// assertSwapTarget: the updater may only ever replace <install>/bin or <install>/ui.
+// User data (data/, keys/, logs/, tools/, settings) is never touched.
+func assertSwapTarget(install, live string) error {
+	rel, err := filepath.Rel(install, live)
+	if err != nil || (rel != "bin" && rel != "ui") {
+		return fmt.Errorf("refusing to swap non-app path %q", live)
+	}
+	return nil
 }

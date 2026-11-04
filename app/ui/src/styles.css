@@ -470,3 +470,7 @@ body.mode-plain .menu-item .mi-ico{display:none}
 .token-meter,.asst-meter{margin-left:8px;font-size:11px;color:var(--muted,#8aa;);opacity:.9;font-variant-numeric:tabular-nums}
 .thinking{flex-wrap:wrap}
 .asst-stop.hidden,.asst-meter.hidden{display:none!important}
+/* v1.3.4 key store */
+.settings-store{margin:6px 0 12px;padding:8px 10px;border:1px solid #234;border-radius:8px;background:#0c1622;font-size:12px;line-height:1.6}
+.settings-store code{font-size:11px;color:#9fd}
+.term-line.ok{color:#5ee2a0}.term-line.dim{opacity:.6}

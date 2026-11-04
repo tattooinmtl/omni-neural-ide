@@ -1,14 +1,14 @@
-; OMNI-CODE v1.3.3 per-user Windows installer (no admin)
+; OMNI-CODE v1.3.4 per-user Windows installer (no admin)
 ; Installs to %USERPROFILE%\.omni-neural-ide
 !define PRODUCT_NAME "OMNI-CODE"
-!define PRODUCT_VERSION "1.3.3"
+!define PRODUCT_VERSION "1.3.4"
 !define PRODUCT_PUBLISHER "tattooinmtl"
 !define PRODUCT_WEB "https://github.com/tattooinmtl/omni-neural-ide"
 !define REGPATH_UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define OLD_INSTALL_DIR "$LOCALAPPDATA\Programs\OMNI-CODE"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.3.3.exe"
+OutFile "..\..\..\omni-installer\OMNI-CODE-Setup-1.3.4.exe"
 Unicode True
 SetCompressor /SOLID lzma
 RequestExecutionLevel user
@@ -113,6 +113,9 @@ Section "OMNI-CODE (required)" SecMain
   CreateDirectory "$INSTDIR\ui\dist"
   CreateDirectory "$INSTDIR\fixtures"
   CreateDirectory "$INSTDIR\keys"
+  CreateDirectory "$INSTDIR\data"
+  CreateDirectory "$INSTDIR\tools"
+  ; NOTE: installer never writes keys\, data\ (omni.db), tools\ or logs\ — user data survives upgrades.
   CreateDirectory "$INSTDIR\sandbox"
   CreateDirectory "$INSTDIR\checkpoints"
   CreateDirectory "$INSTDIR\logs"
@@ -187,7 +190,15 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\webview2"
   RMDir /r "$INSTDIR\sandbox"
   RMDir /r "$INSTDIR\checkpoints"
-  ; keep keys\ and logs\ (user data)
+  RMDir /r "$INSTDIR\updates"
+  ; User data (data\omni.db with encrypted API keys, keys\, logs\, tools\python) is KEPT by default.
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also delete your OMNI-CODE data?$\r$\n$\r$\nThis removes saved API keys (data\omni.db), settings, logs and the local Python runtime.$\r$\n$\r$\nChoose No to keep them (recommended)." /SD IDNO IDYES un_wipe_data IDNO un_keep_data
+  un_wipe_data:
+    RMDir /r "$INSTDIR\data"
+    RMDir /r "$INSTDIR\keys"
+    RMDir /r "$INSTDIR\logs"
+    RMDir /r "$INSTDIR\tools"
+  un_keep_data:
   Delete "$INSTDIR\README.txt"
   Delete "$INSTDIR\Uninstall.exe"
 

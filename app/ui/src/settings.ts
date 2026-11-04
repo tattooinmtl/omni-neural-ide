@@ -500,10 +500,10 @@ page.querySelector('#avatar-female')?.addEventListener('click', () => {
     const cb = page.querySelector('#mcp-computer-bot') as HTMLInputElement;
     const cs = page.querySelector('#mcp-computer-secret') as HTMLInputElement;
     if (su) su.value = keys.mcpSearchUrl || keys.mcp_search_url || 'https://search.globalwarningnetworks.com/mcp';
-    if (sk) sk.value = keys.mcpSearchKey || keys.mcp_search_key || '';
+    if (sk) { sk.value = ''; const m = keys.mcpSearchKey || keys.mcp_search_key || ''; sk.placeholder = m ? `${m}  (saved — type to replace)` : 'not set'; }
     if (cu) cu.value = keys.mcpComputerUrl || keys.mcp_computer_url || 'https://computers.globalwarningnetworks.com';
     if (cb) cb.value = keys.mcpComputerBot || keys.mcp_computer_bot || '';
-    if (cs) cs.value = keys.mcpComputerSecret || keys.mcp_computer_secret || '';
+    if (cs) { cs.value = ''; const m = keys.mcpComputerSecret || keys.mcp_computer_secret || ''; cs.placeholder = m ? `${m}  (saved — type to replace)` : 'not set'; }
 
     const stSearch = page.querySelector('#mcp-search-status') as HTMLElement;
     const stComp = page.querySelector('#mcp-computer-status') as HTMLElement;
@@ -576,7 +576,8 @@ page.querySelector('#avatar-female')?.addEventListener('click', () => {
 
   private async paintProviders(page: Element) {
     page.innerHTML = `<h2>Providers</h2>
-      <p class="settings-hint">API keys stay on this machine under keys\\providers.json. Changes apply without relaunch.</p>
+      <p class="settings-hint">API keys are stored encrypted in <code>data\\omni.db</code> (SQLite). Updates never touch this file. Keys are shown masked — type a new value to replace one.</p>
+      <div class="settings-store" id="store-info">Loading key store…</div>
       <div class="settings-providers">
         <div class="settings-role">
           <h3>MiniMax <span class="role-pill">Main brain</span></h3>
@@ -618,18 +619,76 @@ page.querySelector('#avatar-female')?.addEventListener('click', () => {
             </select>
           </label>
         </div>
+        <div class="settings-role">
+          <h3>Run code <span class="role-pill side">Local Python / Remote computer</span></h3>
+          <p class="settings-hint"><b>Local Python</b> runs on this PC (embeddable CPython 3.12 in tools\\python, per-workspace .venv) — fast, full file access, Stop/Esc cancels. <b>Remote computer</b> uses the GWN OmniBots computer (MCP / Docker sandbox) — isolated, nothing runs locally.</p>
+          <label class="settings-field">Agent runs code on
+            <select id="set-run-code">
+              <option value="local">Local Python (this PC)</option>
+              <option value="remote">Remote computer (sandboxed)</option>
+            </select>
+          </label>
+          <div class="settings-actions"><button class="settings-btn ghost" id="py-setup">Install / check Python</button><span id="py-status" class="settings-status"></span></div>
+        </div>
         <div class="settings-actions">
           <button class="settings-btn primary" id="save-providers">Save</button>
+          <button class="settings-btn ghost" id="keys-export">Export backup</button>
+          <button class="settings-btn ghost" id="keys-import">Import backup…</button>
           <span id="providers-status" class="settings-status"></span>
         </div>
       </div>`;
+
+    const paintStore = async () => {
+      const box = page.querySelector('#store-info');
+      if (!box) return;
+      try {
+        const s = await api.storeInfo();
+        const enc = s.scheme === 'dpapi-user' ? 'Windows DPAPI (current user)' : 'AES-256-GCM dev key file';
+        box.innerHTML = `<div>🔒 <b>${enc}</b> · <code>${s.db}</code></div>`
+          + (s.warning ? `<div class="settings-status err">${s.warning}</div>` : '')
+          + (s.migrated_plaintext ? `<div>Imported your old plaintext <code>${s.migrated_plaintext}</code>. <button class="settings-btn ghost" id="wipe-plain">Securely wipe it</button></div>` : '');
+        const sel = page.querySelector('#set-run-code') as HTMLSelectElement;
+        if (sel) sel.value = s.run_code === 'remote' ? 'remote' : 'local';
+        page.querySelector('#wipe-plain')?.addEventListener('click', async () => {
+          if (!confirm('Overwrite and delete the old plaintext key file? Your keys stay in the encrypted store.')) return;
+          await api.keysWipeMigrated(); void paintStore();
+        });
+      } catch { box.textContent = 'Key store unavailable (offline/demo).'; }
+    };
+    void paintStore();
+    page.querySelector('#set-run-code')?.addEventListener('change', async (e) => {
+      await api.setSetting('run_code', (e.target as HTMLSelectElement).value).catch(() => {});
+    });
+    page.querySelector('#py-setup')?.addEventListener('click', async () => {
+      const st = page.querySelector('#py-status')!;
+      st.textContent = 'Checking…';
+      try {
+        let s = await api.pythonStatus();
+        if (!s.installed) { st.textContent = 'Installing Python 3.12 (~11 MB download)…'; await api.pythonSetup(); s = await api.pythonStatus(); }
+        st.textContent = s.installed ? `Ready · ${s.base}${s.venv ? ' · venv ✓' : ''}` : 'Not installed';
+        st.className = 'settings-status ' + (s.installed ? 'ok' : 'err');
+      } catch (e: any) { st.textContent = e.message || 'Python setup failed'; st.className = 'settings-status err'; }
+    });
+    page.querySelector('#keys-export')?.addEventListener('click', async () => {
+      const st = page.querySelector('#providers-status')!;
+      try { const r = await api.keysExport(); st.textContent = `Encrypted backup: ${r.path}`; st.className = 'settings-status ok'; }
+      catch (e: any) { st.textContent = e.message; st.className = 'settings-status err'; }
+    });
+    page.querySelector('#keys-import')?.addEventListener('click', async () => {
+      const path = prompt('Path to keys-backup-*.json');
+      if (!path) return;
+      const st = page.querySelector('#providers-status')!;
+      try { const r = await api.keysImport(path); st.textContent = `Imported ${r.imported} keys`; st.className = 'settings-status ok'; }
+      catch (e: any) { st.textContent = e.message; st.className = 'settings-status err'; }
+    });
 
     try {
       const keys = await api.getKeys();
       const mm = page.querySelector('#set-minimax') as HTMLInputElement;
       const nv = page.querySelector('#set-nvidia') as HTMLInputElement;
-      if (mm) mm.value = keys.minimax || '';
-      if (nv) nv.value = keys.nvidia || '';
+      // Server returns masked values only (••••last4); show as placeholder, never as a value to resubmit.
+      if (mm) { mm.value = ''; mm.placeholder = keys.minimax ? `${keys.minimax}  (saved — type to replace)` : 'not set'; mm.type = 'text'; }
+      if (nv) { nv.value = ''; nv.placeholder = keys.nvidia ? `${keys.nvidia}  (saved — type to replace)` : 'not set'; nv.type = 'text'; }
       const max = page.querySelector('#set-max-agents') as HTMLSelectElement;
       if (max && keys.maxAgents) max.value = String(keys.maxAgents);
       const emb = page.querySelector('#set-embed-model') as HTMLSelectElement;

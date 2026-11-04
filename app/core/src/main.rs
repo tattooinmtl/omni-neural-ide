@@ -8,6 +8,8 @@ mod activity;
 mod update;
 mod mcp;
 mod agent_run;
+mod secrets;
+mod python;
 mod delegate;
 mod harness;
 mod state;
@@ -188,6 +190,16 @@ async fn run() -> anyhow::Result<()> {
         .route("/api/health", get(fsapi::health))
         .route("/api/config", get(fsapi::config))
         .route("/api/keys", get(fsapi::get_keys).post(fsapi::set_keys))
+        .route("/api/store/info", get(fsapi::store_info))
+        .route("/api/store/setting", get(fsapi::get_setting).post(fsapi::set_setting))
+        .route("/api/keys/export", post(fsapi::export_keys))
+        .route("/api/keys/import", post(fsapi::import_keys))
+        .route("/api/keys/wipe-migrated", post(fsapi::wipe_migrated))
+        .route("/api/python/status", get(python::status))
+        .route("/api/python/setup", post(python::setup))
+        .route("/api/python/run", post(python::run))
+        .route("/api/python/pip", post(python::pip_install))
+        .route("/api/python/test", post(python::test))
         .route("/api/fs/list", get(fsapi::list_dir))
         .route("/api/fs/read", get(fsapi::read_file))
         .route("/api/fs/write", post(fsapi::write_file))

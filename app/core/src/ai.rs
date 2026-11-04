@@ -30,6 +30,8 @@ pub struct ChatOut {
     pub stopped: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capped: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Clone)]
@@ -96,7 +98,7 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
     let run = st.runs.start("coding-agent");
     let run_id = run.id.clone();
     let system = format!(
-        "You are OMNI-CODE {}, a coding harness worker. Stay inside the project plan allow-list. Prefer concrete code in fenced blocks with file=\"name\". Mode: {}. Tools: to search the web reply ONLY with TOOL:web_search:<query>. Never invent search results. Keep narration short; put large programs in one file fence.",
+        "You are OMNI-CODE {}, a coding harness worker. Stay inside the project plan allow-list. Prefer concrete code in fenced blocks with file=\"name\". Mode: {}. Tools: to search the web reply ONLY with TOOL:web_search:<query>. To run Python locally reply ONLY with TOOL:python_run:<code>; to run tests reply ONLY with TOOL:python_test or TOOL:python_test:<path>; to install packages reply ONLY with TOOL:pip_install:<pkg ...> (user must confirm). Never invent search or run results. Keep narration short; put large programs in one file fence.",
         if *st.mode.read() == "ultra" { "Ultra" } else { "" },
         st.mode.read()
     );
@@ -132,6 +134,7 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
                     usage: Some(usage_from(&run, started)),
                     stopped: true,
                     capped: None,
+                    python: None,
                 }));
             }
             if let Some(c) = capped.clone() {
@@ -143,6 +146,7 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
                     usage: Some(usage_from(&run, started)),
                     stopped: false,
                     capped,
+                    python: None,
                 }));
             }
             st.runs.finish(&run_id);
@@ -164,6 +168,22 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
         }
     }
 
+    // Local Python tools (Stop/cancel via RunRegistry; output also returned for the Terminal)
+    let mut python: Option<serde_json::Value> = None;
+    let trimmed = content.trim().to_string();
+    if let Some(code) = trimmed.strip_prefix("TOOL:python_run:") {
+        let r = crate::python::run_inner(&st, crate::python::RunIn { code: Some(code.trim().replace("\\n", "\n")), script: None, args: vec![], timeout_ms: Some(60_000) }).await;
+        content = py_summary("python_run", &r);
+        python = r.ok();
+    } else if let Some(rest) = trimmed.strip_prefix("TOOL:python_test") {
+        let path = rest.trim_start_matches(':').trim();
+        let r = crate::python::test_inner(&st, crate::python::TestIn { path: (!path.is_empty()).then(|| path.to_string()), timeout_ms: None }).await;
+        content = py_summary("python_test", &r);
+        python = r.ok();
+    } else if let Some(pk) = trimmed.strip_prefix("TOOL:pip_install:") {
+        content = format!("pip_install needs your confirmation: `{}` — approve with the terminal command `pip install {}`.", pk.trim(), pk.trim());
+    }
+
     let files = crate::delegate::extract_and_write_files_pub(&st, &content).unwrap_or_default();
     let display = summarize_for_chat(&content, &files);
 
@@ -177,7 +197,22 @@ pub async fn chat(State(st): State<Arc<AppState>>, Json(body): Json<ChatIn>) -> 
         usage: Some(usage),
         stopped,
         capped,
+        python,
     }))
+}
+
+fn py_summary(tool: &str, r: &Result<serde_json::Value, (StatusCode, String)>) -> String {
+    match r {
+        Ok(v) => {
+            let mut s = format!("[{tool}] exit {}{}{}\n", v["code"], if v["stopped"] == true { " (stopped)" } else { "" }, if v["timed_out"] == true { " (timeout)" } else { "" });
+            let out = v["stdout"].as_str().unwrap_or("");
+            let err = v["stderr"].as_str().unwrap_or("");
+            s.push_str(&out.chars().take(3000).collect::<String>());
+            if !err.is_empty() { s.push_str("\n[stderr]\n"); s.push_str(&err.chars().take(1500).collect::<String>()); }
+            s
+        }
+        Err((_, e)) => format!("[{tool}] failed: {e}"),
+    }
 }
 
 fn usage_from(run: &crate::agent_run::RunHandle, started: std::time::Instant) -> UsageOut {
@@ -446,19 +481,19 @@ fn claim_guard(content: &str, tools: &[String]) -> String {
 pub async fn omni_volunteer(State(st): State<Arc<AppState>>, Json(body): Json<SideIn>) -> Result<Json<ChatOut>, (StatusCode, String)> {
     let ctx = body.input;
     if ctx.trim().is_empty() {
-        return Ok(Json(ChatOut { content: String::new(), model: "omni-volunteer".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None }));
+        return Ok(Json(ChatOut { content: String::new(), model: "omni-volunteer".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None, python: None }));
     }
     let _permit = st.pool.acquire().await;
     bump_minimax_rate(&st)?;
     let keys = st.keys.read().clone();
     let Some(key) = keys.minimax.filter(|s| !s.is_empty()) else {
-        return Ok(Json(ChatOut { content: String::new(), model: "omni-volunteer".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None }));
+        return Ok(Json(ChatOut { content: String::new(), model: "omni-volunteer".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None, python: None }));
     };
     let system = "You are Omni the Presence. Give ONE short optional remark (max 20 words) about the coding context, or reply with exactly NO if nothing useful to say.";
     let msgs = vec![Msg { role: "user".into(), content: ctx }];
     let content = call_minimax(&key, system, &msgs).await.unwrap_or_default();
     let content = if content.trim().eq_ignore_ascii_case("NO") { String::new() } else { content };
-    Ok(Json(ChatOut { content, model: "omni-volunteer".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None }))
+    Ok(Json(ChatOut { content, model: "omni-volunteer".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None, python: None }))
 }
 
 /// NVIDIA embeddings — skipped gracefully if no key.
@@ -506,7 +541,7 @@ pub async fn side_task(State(st): State<Arc<AppState>>, Json(body): Json<SideIn>
         )
         .await
         {
-            Ok(content) => return Ok(Json(ChatOut { content, model: format!("NVIDIA side ({model})"), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None })),
+            Ok(content) => return Ok(Json(ChatOut { content, model: format!("NVIDIA side ({model})"), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None, python: None })),
             Err(e) => tracing::warn!("nvidia side failed, fallback: {e}"),
         }
     }
@@ -517,7 +552,7 @@ pub async fn side_task(State(st): State<Arc<AppState>>, Json(body): Json<SideIn>
     let _permit = st.pool.acquire().await;
     bump_minimax_rate(&st)?;
     let content = call_minimax(&key, &system, &msgs).await?;
-    Ok(Json(ChatOut { content, model: "MiniMax side-fallback".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None }))
+    Ok(Json(ChatOut { content, model: "MiniMax side-fallback".into(), files_written: vec![], run_id: None, usage: None, stopped: false, capped: None, python: None }))
 }
 
 async fn tag_mood_best_effort(st: &AppState, text: &str) -> Option<String> {
@@ -652,6 +687,18 @@ async fn mock_coding_reply(
         || lower.contains("game")
         || lower.contains("html");
     let is_omni = system.contains("Omni the Presence");
+    if !is_omni && lower.contains("pytest") {
+        run.bump_tokens(6);
+        return Ok("TOOL:python_test".into());
+    }
+    if !is_omni && lower.contains("long python") {
+        run.bump_tokens(6);
+        return Ok("TOOL:python_run:import time\\nfor i in range(120):\\n    print('tick', i, flush=True)\\n    time.sleep(0.5)".into());
+    }
+    if !is_omni && lower.contains("python") && lower.contains("hello") {
+        run.bump_tokens(6);
+        return Ok("TOOL:python_run:import sys\\nprint('hello from OMNI python', sys.version.split()[0])".into());
+    }
 
     // Simulate long thinking; bump tokens; honor cancel
     let steps = if wants_game { 36 } else { 12 };

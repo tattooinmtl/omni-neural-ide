@@ -209,7 +209,7 @@ async fn fetch_sha_for(client: &reqwest::Client, url: &str, asset: &str) -> Resu
     Err("sha not found".into())
 }
 
-async fn download_file(url: &str, dest: &std::path::Path) -> Result<(), (StatusCode, String)> {
+pub async fn download_file(url: &str, dest: &std::path::Path) -> Result<(), (StatusCode, String)> {
     let client = reqwest::Client::new();
     let bytes = client.get(url).header("User-Agent", "OMNI-CODE").send().await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
@@ -231,7 +231,7 @@ fn sha256_file(path: &std::path::Path) -> Result<String, String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn unzip_portable(zip_path: &std::path::Path, dest: &std::path::Path) -> Result<(), String> {
+pub fn unzip_portable(zip_path: &std::path::Path, dest: &std::path::Path) -> Result<(), String> {
     // Prefer `unzip` / PowerShell; fallback to zip crate if available — use std Command
     #[cfg(windows)]
     {

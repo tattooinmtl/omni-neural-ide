@@ -17,12 +17,12 @@ import (
 )
 
 type plan struct {
-	InstallDir string   `json:"install_dir"`
-	StageDir   string   `json:"stage_dir"`
-	WaitPIDs   []int    `json:"wait_pids"`
-	Mode       string   `json:"mode"`
-	Relaunch   string   `json:"relaunch"` // path to launcher.exe
-	BackupDir  string   `json:"backup_dir"`
+	InstallDir string `json:"install_dir"`
+	StageDir   string `json:"stage_dir"`
+	WaitPIDs   []int  `json:"wait_pids"`
+	Mode       string `json:"mode"`
+	Relaunch   string `json:"relaunch"` // path to launcher.exe
+	BackupDir  string `json:"backup_dir"`
 }
 
 func main() {
@@ -105,6 +105,9 @@ func main() {
 }
 
 func swapDir(stage, live, backup string, logf func(string, ...any)) error {
+	if err := assertSwapTarget(filepath.Dir(live), live); err != nil {
+		return err
+	}
 	if _, err := os.Stat(stage); err != nil {
 		logf("stage missing %s — skip", stage)
 		return nil
@@ -212,3 +215,13 @@ func fatal(err error) {
 }
 
 var _ = strings.TrimSpace
+
+// assertSwapTarget: the updater may only ever replace <install>/bin or <install>/ui.
+// User data (data/, keys/, logs/, tools/, settings) is never touched.
+func assertSwapTarget(install, live string) error {
+	rel, err := filepath.Rel(install, live)
+	if err != nil || (rel != "bin" && rel != "ui") {
+		return fmt.Errorf("refusing to swap non-app path %q", live)
+	}
+	return nil
+}

@@ -1,6 +1,6 @@
 [package]
 name = "omni-core"
-version = "1.3.3"
+version = "1.3.4"
 edition = "2021"
 description = "OMNI-CODE / Ultra Rust core — harness, guardrails, API, native window"
 
@@ -9,6 +9,7 @@ default = ["native-window"]
 native-window = ["dep:wry", "dep:tao"]
 
 [dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
 anyhow = "1"
 axum = { version = "0.7", features = ["ws", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -30,8 +31,12 @@ regex = "1"
 once_cell = "1"
 parking_lot = "0.12"
 sysinfo = "0.33"
+rusqlite = { version = "0.32", features = ["bundled"] }
+aes-gcm = "0.10"
+rand = "0.8"
 
 [target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 wry = { version = "0.47", optional = true }
 tao = { version = "0.30", optional = true }
 
